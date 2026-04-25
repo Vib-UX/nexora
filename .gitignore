@@ -1,0 +1,32 @@
+# Node
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+build/
+*.log
+.env
+.env.local
+.env.*.local
+
+# Rust / Stylus
+target/
+**/*.rs.bk
+Cargo.lock
+*.wasm
+
+# Editor
+.idea/
+.vscode/
+.DS_Store
+
+# Generated artifacts
+deployments/
+deployments.json
+chain/data/
+chain/.nitro/
+
+# Coverage
+coverage/
+*.lcov

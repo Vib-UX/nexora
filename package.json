@@ -1,0 +1,29 @@
+{
+  "name": "nexora",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Post-quantum smart-wallet stack on Arbitrum Orbit (Stylus/Rust).",
+  "license": "MIT",
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:up": "bash scripts/dev-up.sh",
+    "deploy": "tsx scripts/deploy-all.ts",
+    "build": "pnpm -r --parallel build",
+    "lint": "pnpm -r --parallel lint",
+    "test": "pnpm -r --parallel test",
+    "agent:demo": "pnpm --filter @nexora/agent demo",
+    "dashboard:dev": "pnpm --filter @nexora/dashboard dev",
+    "relayer:dev": "pnpm --filter @nexora/relayer dev"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.7.5",
+    "dotenv": "^16.4.5",
+    "viem": "^2.21.40",
+    "@nexora/wallet-sdk": "workspace:*"
+  }
+}
