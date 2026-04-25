@@ -1,0 +1,19 @@
+[package]
+name = "nexora-shared"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Shared types, op-hash, and constants for Nexora Stylus contracts."
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }
+sha3 = { workspace = true }
+
+[features]
+default = []
+std = ["alloy-primitives/std", "alloy-sol-types/std", "sha3/std"]
