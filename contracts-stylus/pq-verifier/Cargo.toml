@@ -1,0 +1,21 @@
+[package]
+name = "nexora-pq-verifier"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "IPQVerifier implementation with a deterministic mock Falcon-512 backend."
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+stylus-sdk = { workspace = true, features = ["mini-alloc"] }
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }
+sha3 = { workspace = true }
+nexora-shared = { workspace = true }
+
+[features]
+default = []
+export-abi = ["stylus-sdk/export-abi"]
