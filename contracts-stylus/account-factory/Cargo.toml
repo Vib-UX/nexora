@@ -1,0 +1,20 @@
+[package]
+name = "nexora-account-factory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "CREATE2-style deterministic deployer for NexoraAccount."
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+stylus-sdk = { workspace = true, features = ["mini-alloc"] }
+alloy-primitives = { workspace = true }
+alloy-sol-types = { workspace = true }
+sha3 = { workspace = true }
+
+[features]
+default = []
+export-abi = ["stylus-sdk/export-abi"]
