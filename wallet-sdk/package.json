@@ -1,0 +1,39 @@
+{
+  "name": "@nexora/wallet-sdk",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./signers": {
+      "types": "./dist/signers/index.d.ts",
+      "import": "./dist/signers/index.js",
+      "default": "./dist/signers/index.js"
+    },
+    "./abi": {
+      "types": "./dist/abi/index.d.ts",
+      "import": "./dist/abi/index.js",
+      "default": "./dist/abi/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "tsx --test src/**/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "viem": "^2.21.40"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.7.5"
+  }
+}
