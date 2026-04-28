@@ -1,0 +1,20 @@
+{
+  "name": "@nexora/chain",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy:l3": "tsx deploy-l3.ts",
+    "build": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@arbitrum/orbit-sdk": "^0.21.0",
+    "viem": "^2.21.40",
+    "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}

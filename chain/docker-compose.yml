@@ -1,0 +1,59 @@
+version: "3.8"
+
+# Local Nexora devnet — single Nitro node in `--dev` mode.
+# ChainId is 412346 (Nitro's built-in dev chain).
+#
+# In `--dev` mode Nitro pre-funds a known account:
+#   address     : 0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E
+#   private key : 0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659
+# This is the deployer used by `scripts/deploy-all.ts`.
+services:
+  nitro:
+    image: offchainlabs/nitro-node:v3.2.1-d81324d
+    container_name: nexora-nitro
+    restart: unless-stopped
+    ports:
+      - "8547:8547"
+      - "8548:8548"
+    volumes:
+      - ./data:/home/user/.arbitrum
+    command:
+      - --dev
+      - --http.addr=0.0.0.0
+      - --http.port=8547
+      - --http.api=net,web3,eth,debug,arb,arbdebug
+      - --http.corsdomain=*
+      - --http.vhosts=*
+      - --ws.addr=0.0.0.0
+      - --ws.port=8548
+      - --ws.api=net,web3,eth,arb,arbdebug
+      - --ws.origins=*
+
+  blockscout:
+    image: blockscout/blockscout:6.9.2
+    container_name: nexora-blockscout
+    profiles: ["explorer"]
+    depends_on:
+      - nitro
+    ports:
+      - "4000:4000"
+    environment:
+      ETHEREUM_JSONRPC_VARIANT: geth
+      ETHEREUM_JSONRPC_HTTP_URL: http://nitro:8547
+      ETHEREUM_JSONRPC_WS_URL: ws://nitro:8548
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blockscout
+      ECTO_USE_SSL: "false"
+      SUBNETWORK: Nexora
+      NETWORK: Nexora
+    command: bash -c "bin/blockscout eval 'Elixir.Explorer.ReleaseTasks.create_and_migrate' && bin/blockscout start"
+
+  postgres:
+    image: postgres:15
+    container_name: nexora-postgres
+    profiles: ["explorer"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: blockscout
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data

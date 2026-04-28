@@ -1,0 +1,57 @@
+{
+  "$schema": "https://docs.arbitrum.io/orbit/config-schema",
+  "name": "Nexora Devnet",
+  "chainId": 20056,
+  "chainIdHex": "0x4E58",
+  "parent": {
+    "name": "Arbitrum Sepolia",
+    "chainId": 421614,
+    "rpcUrlEnv": "PARENT_RPC_URL"
+  },
+  "consensus": {
+    "type": "AnyTrust",
+    "blockTimeSeconds": 1,
+    "minL2BaseFeeWei": "100000000"
+  },
+  "gas": {
+    "feeToken": "ETH",
+    "speedLimitPerSecond": 7000000,
+    "maxTxGasLimit": 32000000
+  },
+  "stylus": {
+    "enabled": true,
+    "wasmGasPrice": "1",
+    "memorySoftLimitBytes": 4194304,
+    "maxStackDepth": 1024
+  },
+  "rpc": {
+    "http": "http://localhost:8547",
+    "ws": "ws://localhost:8548",
+    "namespaces": ["eth", "net", "web3", "arb", "debug"]
+  },
+  "explorer": {
+    "url": "http://localhost:4000"
+  },
+  "validators": [
+    {
+      "addressEnv": "VALIDATOR_ADDRESS"
+    }
+  ],
+  "sequencer": {
+    "addressEnv": "SEQUENCER_ADDRESS",
+    "centralized": true
+  },
+  "owner": {
+    "addressEnv": "ORBIT_OWNER_ADDRESS"
+  },
+  "nativeCurrency": {
+    "name": "Ether",
+    "symbol": "ETH",
+    "decimals": 18
+  },
+  "metadata": {
+    "description": "Nexora — post-quantum smart-wallet L3 (hackathon MVP).",
+    "website": "https://nexora.dev",
+    "tags": ["orbit", "stylus", "post-quantum", "smart-wallet"]
+  }
+}
