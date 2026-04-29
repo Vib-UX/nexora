@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: #08090d;
+  color: #e7e9ee;
+  font-family:
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    sans-serif;
+}
+
+.tag-low {
+  @apply bg-emerald-500/10 text-emerald-300 border border-emerald-500/30;
+}
+.tag-high {
+  @apply bg-amber-500/10 text-amber-300 border border-amber-500/30;
+}
+.tag-critical {
+  @apply bg-rose-500/10 text-rose-300 border border-rose-500/30;
+}
