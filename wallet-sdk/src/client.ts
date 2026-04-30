@@ -21,8 +21,14 @@ import {
   type FalconMockKeypair,
   signFalconMock,
 } from "./signers/falconMock.js";
+import {
+  type Falcon512Keypair,
+  type Falcon512SignOpts,
+  signFalcon512,
+} from "./signers/falcon512.js";
 import { encodeSignatures } from "./signers/envelope.js";
 import { nexoraAccountAbi } from "./abi/nexoraAccount.js";
+import type { PqSig } from "./types.js";
 
 export interface NexoraClientConfig {
   publicClient: PublicClient;
@@ -31,15 +37,22 @@ export interface NexoraClientConfig {
   account: Address;
   /// Address of the policy engine (used by the SDK for pre-classification).
   policyEngine: Address;
-  /// PQ keypair held client-side (browser localStorage / Node memory).
-  pqKeypair: FalconMockKeypair;
+  /**
+   * PQ keypair held client-side. Shape depends on `scheme`:
+   *   - FalconMock  → `FalconMockKeypair` (deterministic scheme-1 keypair)
+   *   - Falcon512   → `Falcon512Keypair` (real keypair; signing happens via
+   *                    the local `falcon-signer` daemon)
+   */
+  pqKeypair: FalconMockKeypair | Falcon512Keypair;
   /// Owner EOA used for ECDSA signatures.
   owner: Account;
-  /// Verifier scheme to request when PQ is required (default = FalconMock).
+  /// Verifier scheme to request when PQ is required (default = scheme 1).
   scheme?: VerifierScheme;
   /// Optional relayer URL — when set, ops POST to it instead of going
   /// through the connected wallet.
   relayerUrl?: string;
+  /// Optional Falcon-512 signer-daemon options (URL, fetch override).
+  falcon512?: Falcon512SignOpts;
 }
 
 export interface BuildOpInput {
@@ -63,6 +76,19 @@ export interface SignedUserOp {
 
 export class NexoraClient {
   constructor(public readonly config: NexoraClientConfig) {}
+
+  /// Dispatch PQ signing to the configured backend (scheme 1 vs Falcon-512).
+  private async signPq(opHash: Hex, scheme: VerifierScheme): Promise<PqSig> {
+    if (scheme === VerifierScheme.Falcon512) {
+      return signFalcon512(
+        opHash,
+        this.config.pqKeypair as Falcon512Keypair,
+        this.config.falcon512,
+      );
+    }
+    // Scheme 1 (or unknown PQ scheme defaults here).
+    return signFalconMock(opHash, this.config.pqKeypair as FalconMockKeypair);
+  }
 
   async nextNonce(channel: bigint): Promise<bigint> {
     const v = (await this.config.publicClient.readContract({
@@ -123,11 +149,13 @@ export class NexoraClient {
       ecdsaSig = await signEcdsaOpHash(this.config.owner, opHash);
     }
     if (tag === PolicyTag.High || tag === PolicyTag.Critical) {
-      pqSig = signFalconMock(opHash, this.config.pqKeypair);
+      pqSig = await this.signPq(opHash, scheme);
     }
 
     op.signatures = encodeSignatures(ecdsaSig, pqSig);
-    const pqPubkey = bytesToHex(this.config.pqKeypair.publicKey);
+    const pqPubkey = bytesToHex(
+      (this.config.pqKeypair as { publicKey: Uint8Array }).publicKey,
+    );
 
     return {
       op,

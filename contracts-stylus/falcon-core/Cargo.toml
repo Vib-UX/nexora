@@ -1,0 +1,16 @@
+[package]
+name = "nexora-falcon-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Pure-Rust Falcon-512 verify implementation (no_std, no Stylus deps)."
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+
+[dev-dependencies]
+falcon-rust = "0.1.2"
+rand = "0.8"

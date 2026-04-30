@@ -1,5 +1,5 @@
 //! `VerifierRegistry` — the indirection that lets us swap PQ verifier
-//! implementations (mock → real Falcon → Nitro precompile) without
+//! implementations (reference verifier → Falcon-512 → Nitro precompile) without
 //! redeploying any wallets.
 //!
 //! Wallets call `registry.verifier(scheme)` to discover the address of

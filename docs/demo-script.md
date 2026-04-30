@@ -1,4 +1,4 @@
-# Nexora — Demo Script (judges)
+# Nexora — Walkthrough
 
 Total runtime target: 5 minutes. Every step has an objective + a fallback.
 
@@ -28,20 +28,20 @@ wallet. Standard tooling, standard RPC, full ecosystem compat.
 
 ## 2. Inspect the smart account
 
-The dashboard auto-derives a Falcon-mock keypair (browser localStorage)
+The dashboard auto-derives a scheme-1 keypair (browser localStorage)
 and computes the deterministic CREATE2 address for the user's smart
 account using `AccountFactory.predict_address`. The four cards show:
 
 | Card | What |
 |---|---|
 | ECDSA owner | Your EOA |
-| PQ pubkey hash | `keccak256(pubkey)` of your local Falcon-mock key |
+| PQ pubkey hash | `keccak256(pubkey)` of your local scheme-1 key |
 | Smart account | Deterministic future address |
 | Verifier registry | The swappable indirection |
 
 ## 3. LOW-tag tx — "ECDSA still works"
 
-Send `0.001 ETH` to the bridge-mock target. Click **Classify** → tag
+Send `0.001 ETH` to the configured bridge target. Click **Classify** → tag
 shows **LOW**. Click **Sign & send** → MetaMask shows one ECDSA prompt.
 The op executes; `UserOpExecuted` shows up in the history with a green
 LOW pill.
@@ -50,7 +50,7 @@ LOW pill.
 
 Bump value to `5 ETH` (above the 1 ETH high-threshold). **Classify** →
 **HIGH**. **Sign & send**. Two prompts: ECDSA via MetaMask, then a
-silent in-browser Falcon-mock signature. Op executes. History entry
+silent in-browser PQ signature (scheme 1). Op executes. History entry
 shows an amber HIGH pill.
 
 **Show**: open dev tools, watch the `signatures` calldata. It is
@@ -67,7 +67,7 @@ in the trace. Restore the original key.
 In a separate terminal:
 
 ```bash
-# Deploy a second mock verifier instance
+# Deploy a second reference verifier instance
 cd contracts-stylus/pq-verifier && cargo stylus deploy ...
 
 # Point the registry at it
@@ -119,7 +119,7 @@ If the local chain misbehaves:
 
 > "Nexora separates **what to validate** (policy engine) from **how to
 > validate** (verifier registry). Today the registry resolves to a
-> Stylus mock; tomorrow it resolves to a Nitro precompile or real
-> Falcon. Wallet bytecode is unchanged. SDK calls are unchanged.
+> Stylus reference verifier; it can resolve to Falcon-512 or a Nitro
+> precompile. Wallet bytecode is unchanged. SDK calls are unchanged.
 > Hybrid ECDSA + PQ means we don't break ecosystem compatibility while
 > we phase in post-quantum security."

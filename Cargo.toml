@@ -1,7 +1,9 @@
 [workspace]
 members = [
     "contracts-stylus/shared",
+    "contracts-stylus/falcon-core",
     "contracts-stylus/pq-verifier",
+    "contracts-stylus/pq-verifier-falcon512",
     "contracts-stylus/verifier-registry",
     "contracts-stylus/policy-engine",
     "contracts-stylus/nexora-account",
@@ -24,6 +26,7 @@ alloy-sol-types = { version = "=0.7.6", default-features = false }
 sha3 = { version = "0.10", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 nexora-shared = { path = "contracts-stylus/shared", default-features = false }
+nexora-falcon-core = { path = "contracts-stylus/falcon-core", default-features = false }
 
 [profile.release]
 codegen-units = 1

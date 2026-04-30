@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
-description = "IPQVerifier implementation with a deterministic mock Falcon-512 backend."
+description = "IPQVerifier implementation: scheme 1 (FALCON_MOCK) deterministic reference verifier."
 
 [lib]
 crate-type = ["cdylib", "lib"]

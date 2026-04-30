@@ -1,12 +1,12 @@
-//! Mock Falcon-512 verifier — implements the canonical `IPQVerifier`
-//! interface so every other Nexora contract can call into it without
-//! caring whether the backend is mock, real Falcon, or a future Nitro
-//! precompile mounted at the same address.
+//! Scheme-1 (FALCON_MOCK) reference verifier — implements the canonical
+//! `IPQVerifier` interface so every other Nexora contract can call into it
+//! without caring whether the backend is this reference path, full
+//! Falcon-512, or a future Nitro precompile behind the registry.
 //!
-//! ## Mock semantics
+//! ## Reference semantics
 //!
-//! For v1 we want a **structurally correct** signature flow with the same
-//! API as a real Falcon-512 verifier:
+//! This verifier provides a **structurally correct** signature flow with the
+//! same API as full Falcon-512:
 //!
 //! ```text
 //! verify(msgHash, sig, pubkey) := keccak256(pubkey || msgHash) == sig[..32]
@@ -14,9 +14,9 @@
 //!                              && pubkey.length   == FALCON512_PK_BYTES
 //! ```
 //!
-//! The mock-signer in `wallet-sdk` produces signatures using exactly this
-//! rule. Swapping in a real Falcon implementation only requires changing
-//! the body of [`PqVerifier::verify`] — the calling contracts do not move.
+//! The scheme-1 signer in `wallet-sdk` produces signatures using exactly this
+//! rule. Swapping in full Falcon-512 only requires pointing the registry at
+//! a different `IPQVerifier` — the calling contracts do not move.
 
 #![cfg_attr(not(feature = "export-abi"), no_main)]
 
@@ -26,16 +26,16 @@ use alloc::vec::Vec;
 use alloy_primitives::{keccak256, Address, B256, U16};
 use stylus_sdk::{abi::Bytes, prelude::*};
 
-/// Canonical Falcon-512 sizes (real algorithm, not mock).
-/// Mock pubkey/sig must still match these lengths so the on-the-wire
-/// shape matches a future real verifier.
+/// Canonical Falcon-512 sizes (on-wire layout).
+/// Pubkey and signature must match these lengths so the on-the-wire shape
+/// matches full Falcon-512 verification.
 pub const FALCON512_PUBKEY_BYTES: usize = 897;
 pub const FALCON512_SIG_BYTES: usize = 666;
 
 /// FALCON_512 identifier in the Nexora `VerifierScheme` enum.
 pub const SCHEME_FALCON512: u16 = 2;
 
-/// Identifier reported when the binary backs the mock implementation.
+/// Identifier reported for the FALCON_MOCK implementation.
 pub const SCHEME_FALCON_MOCK: u16 = 1;
 
 sol_storage! {
@@ -89,7 +89,7 @@ impl PqVerifier {
         FALCON512_SIG_BYTES as u16
     }
 
-    /// Mock Falcon verify — deterministic, structurally correct.
+    /// Reference verify — deterministic, structurally aligned with Falcon-512 sizes.
     ///
     /// Returns `true` iff the first 32 bytes of `sig` equal
     /// `keccak256(pubkey || msg_hash)` and the lengths are valid.

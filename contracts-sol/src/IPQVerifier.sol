@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 /// @title IPQVerifier
 /// @notice Canonical post-quantum signature verifier interface.
-///         Implementations: mock Falcon (v1, Stylus), real Falcon-512 (v2),
+///         Implementations: scheme 1 reference verifier (Stylus), Falcon-512 (v2),
 ///         and a future Nitro precompile bound to the same registry slot.
 interface IPQVerifier {
     /// @notice Returns the VerifierScheme id (e.g. 1 = FALCON_MOCK, 2 = FALCON_512).

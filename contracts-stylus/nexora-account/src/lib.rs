@@ -155,12 +155,12 @@ impl Account {
         Account::do_is_valid_signature(self, hash, sig.0)
     }
 
-    // ---- Recovery (stubbed for MVP) ------------------------------------
+    // ---- Recovery (stubbed when `recovery` feature off) -----------------
     //
     // Timelocked owner / PQ-pubkey rotation logic lives in `recovery.rs`,
     // gated behind the `recovery` cargo feature. The production implementation
     // pushes the activated WASM over the Stylus 24KB-after-brotli limit, so
-    // for MVP we keep the ABI surface but revert at call time. The
+    // with default features we keep the ABI surface but revert at call time. The
     // dispatch/storage layout is forward-compatible — flipping the feature
     // on (and trimming the verifier path) re-enables the full flow.
 

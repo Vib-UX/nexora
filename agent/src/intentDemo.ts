@@ -12,13 +12,17 @@ import {
   toHex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { NEXORA_CHAIN, NexoraClient } from "@nexora/wallet-sdk";
-import { falconMockKeypairFromSeed } from "@nexora/wallet-sdk/signers";
+import { NEXORA_CHAIN, NexoraClient, VerifierScheme } from "@nexora/wallet-sdk";
+import {
+  falconMockKeypairFromSeed,
+  loadFalcon512Keypair,
+} from "@nexora/wallet-sdk/signers";
 import { StaticIntentProvider, type Intent } from "./intentProvider.js";
 
 interface Deployments {
   chainId: number;
   pqVerifier: Address;
+  pqVerifierFalcon512?: Address;
   verifierRegistry: Address;
   policyEngine: Address;
   accountImplementation: Address;
@@ -59,9 +63,26 @@ async function main() {
     transport: http(rpcUrl),
   });
 
-  const seed = new Uint8Array(32);
-  seed.fill(0x42);
-  const falconKp = falconMockKeypairFromSeed(seed);
+  // Choose PQ verifier scheme via FALCON_SCHEME env (1 = FALCON_MOCK, 2 = FALCON_512).
+  // For scheme 2 the agent talks to the local `falcon-signer` daemon
+  // (default URL http://127.0.0.1:9090, override via FALCON_SIGNER_URL).
+  const schemeNum = Number(process.env.FALCON_SCHEME ?? VerifierScheme.FalconMock);
+  const scheme: VerifierScheme =
+    schemeNum === VerifierScheme.Falcon512
+      ? VerifierScheme.Falcon512
+      : VerifierScheme.FalconMock;
+  const signerUrl = process.env.FALCON_SIGNER_URL ?? "http://127.0.0.1:9090";
+
+  let pqKeypair;
+  if (scheme === VerifierScheme.Falcon512) {
+    console.log(`[nexora-agent] PQ scheme=Falcon-512 (real)  signer=${signerUrl}`);
+    pqKeypair = await loadFalcon512Keypair({ signerUrl });
+  } else {
+    console.log(`[nexora-agent] PQ scheme=FALCON_MOCK (1)`);
+    const seed = new Uint8Array(32);
+    seed.fill(0x42);
+    pqKeypair = falconMockKeypairFromSeed(seed);
+  }
 
   const client = new NexoraClient({
     publicClient,
@@ -69,7 +90,9 @@ async function main() {
     account: deployments.account,
     policyEngine: deployments.policyEngine,
     owner,
-    pqKeypair: falconKp,
+    pqKeypair,
+    scheme,
+    falcon512: { signerUrl },
     relayerUrl: process.env.RELAYER_URL,
   });
 

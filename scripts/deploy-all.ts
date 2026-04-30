@@ -3,12 +3,12 @@
  * together, and writes deployments.json at repo root.
  *
  * Order:
- *   1. pq-verifier         (mock Falcon-512)
- *   2. verifier-registry   + setVerifier(FALCON_512_MOCK = 1, pqVerifier)
+ *   1. pq-verifier         (scheme 1, FALCON_MOCK)
+ *   2. verifier-registry   + setVerifier(1, pqVerifier)
  *   3. policy-engine
  *   4. nexora-account      (singleton implementation)
  *   5. account-factory     (init -> impl, registry, policy)
- *   6. bridge-mock         (placeholder target for HIGH ops)
+ *   6. bridge placeholder  (deployer stand-in for HIGH-op targets)
  *
  * The actual Stylus deployment is delegated to `cargo stylus deploy`
  * from each contract crate; this script orchestrates the calls and
@@ -66,6 +66,7 @@ const walletClient = createWalletClient({
 interface Deployment {
   chainId: number;
   pqVerifier: Address;
+  pqVerifierFalcon512: Address;
   verifierRegistry: Address;
   policyEngine: Address;
   accountImplementation: Address;
@@ -78,6 +79,11 @@ interface Deployment {
 
 const STYLUS_CRATES: Array<{ name: string; wasm: string; key: keyof Deployment }> = [
   { name: "pq-verifier", wasm: "nexora_pq_verifier.wasm", key: "pqVerifier" },
+  {
+    name: "pq-verifier-falcon512",
+    wasm: "nexora_pq_verifier_falcon512.wasm",
+    key: "pqVerifierFalcon512",
+  },
   { name: "verifier-registry", wasm: "nexora_verifier_registry.wasm", key: "verifierRegistry" },
   { name: "policy-engine", wasm: "nexora_policy_engine.wasm", key: "policyEngine" },
   { name: "nexora-account", wasm: "nexora_account.wasm", key: "accountImplementation" },
@@ -136,10 +142,11 @@ async function main() {
   buildAllWasm();
 
   for (const c of STYLUS_CRATES) {
-    addresses[c.key] = deployStylusContract(c);
+    (addresses as Record<keyof Deployment, Address | number | undefined>)[c.key] =
+      deployStylusContract(c);
   }
 
-  // Fund a fake "bridgeMock" — use deployer address as a stand-in target.
+  // Bridge target stand-in — use deployer address until a bridge contract exists.
   // Replace with a deployed contract once we have one.
   addresses.bridgeMock = deployer.address;
 
@@ -150,11 +157,18 @@ async function main() {
   // ---- Wiring ----------------------------------------------------------
   console.log("\n[deploy] wiring contracts...");
 
-  // 1. PqVerifier.init(deployer, true)
+  // 1. PqVerifier.init(deployer, true)            (scheme 1, FALCON_MOCK)
   await call(
     dep.pqVerifier,
     "init(address,bool)",
     encode(["address", "bool"], [deployer.address, true]),
+  );
+
+  // 1b. PqVerifierFalcon512.init(deployer)         (scheme 2, FALCON_512)
+  await call(
+    dep.pqVerifierFalcon512,
+    "init(address)",
+    encode(["address"], [deployer.address]),
   );
 
   // 2. VerifierRegistry.init(deployer)
@@ -164,11 +178,18 @@ async function main() {
     encode(["address"], [deployer.address]),
   );
 
-  // 3. VerifierRegistry.setVerifier(FALCON_MOCK = 1, pqVerifier)
+  // 3a. VerifierRegistry.setVerifier(FALCON_MOCK = 1, pqVerifier)
   await call(
     dep.verifierRegistry,
     "setVerifier(uint16,address)",
     encode(["uint16", "address"], [1, dep.pqVerifier]),
+  );
+
+  // 3b. VerifierRegistry.setVerifier(FALCON_512 = 2, pqVerifierFalcon512)
+  await call(
+    dep.verifierRegistry,
+    "setVerifier(uint16,address)",
+    encode(["uint16", "address"], [2, dep.pqVerifierFalcon512]),
   );
 
   // 4. PolicyEngine.init(deployer)
@@ -205,8 +226,8 @@ async function main() {
   );
 
   // 7. AccountFactory.createAccount(deployer, pqPubkeyHash, salt)
-  // Use the same Falcon-mock seed as agent/intentDemo.ts so the agent's PQ
-  // key matches the on-chain commitment.
+  // Same 32-byte seed as agent/intentDemo.ts so agent PQ keys align with
+  // the on-chain commitment.
   const seed = new Uint8Array(32).fill(0x42);
   const falconKp = falconMockKeypairFromSeed(seed);
   const pqPubkeyHash = falconPubkeyCommitment(falconKp.publicKey);
@@ -251,6 +272,41 @@ async function main() {
     JSON.stringify(dep, null, 2),
   );
   console.log(`\n[deploy] wrote ${resolve(outDir, "deployments.json")}`);
+
+  const dashboardPublic = resolve(ROOT, "dashboard/public/deployments.json");
+  try {
+    const {
+      pqVerifier,
+      pqVerifierFalcon512,
+      verifierRegistry,
+      policyEngine,
+      accountImplementation,
+      accountFactory,
+      bridgeMock,
+      account,
+    } = dep;
+    writeFileSync(
+      dashboardPublic,
+      JSON.stringify(
+        {
+          chainId: dep.chainId,
+          pqVerifier,
+          pqVerifierFalcon512,
+          verifierRegistry,
+          policyEngine,
+          accountImplementation,
+          accountFactory,
+          bridgeMock,
+          account,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(`[deploy] synced dashboard/public/deployments.json`);
+  } catch (e) {
+    console.warn("[deploy] could not write dashboard/public/deployments.json", e);
+  }
 }
 
 // Minimal selector+data assembly so we don't need typechain.

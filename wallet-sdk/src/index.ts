@@ -1,7 +1,7 @@
 /**
  * @nexora/wallet-sdk — TypeScript SDK for the Nexora smart wallet.
  *
- * Build a UserOp, hash it, sign it (ECDSA + Falcon-mock), and submit it
+ * Build a UserOp, hash it, sign it (ECDSA + PQ per policy), and submit it
  * directly via RPC or via the relayer.
  */
 

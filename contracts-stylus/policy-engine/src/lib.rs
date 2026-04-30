@@ -5,7 +5,7 @@
 //! - `CRITICAL` (2) — PQ + timelock
 //!
 //! Wallets ask the engine for a `Tag` *before* they validate signatures so
-//! the validator router knows which signatures are required. The MVP uses
+//! the validator router knows which signatures are required. The engine uses
 //! a transparent rule-table:
 //!
 //! ```text

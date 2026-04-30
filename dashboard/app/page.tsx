@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   useAccount,
   useBalance,
@@ -13,7 +13,7 @@ import { ConnectCard } from "@/components/ConnectCard";
 import { AccountCard } from "@/components/AccountCard";
 import { SendForm } from "@/components/SendForm";
 import { OpHistory } from "@/components/OpHistory";
-import { loadDeployments } from "@/lib/deployments";
+import { useDeployments } from "@/lib/useDeployments";
 import { loadOrCreateFalconKeypair } from "@/lib/falconStorage";
 import type { FalconMockKeypair } from "@nexora/wallet-sdk/signers";
 import { NEXORA_CHAIN } from "@nexora/wallet-sdk";
@@ -25,7 +25,7 @@ export default function Home() {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const balance = useBalance({ address });
-  const deployments = useMemo(loadDeployments, []);
+  const { deployments } = useDeployments();
   const [falconKp, setFalconKp] = useState<FalconMockKeypair | null>(null);
 
   useEffect(() => {

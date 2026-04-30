@@ -14,7 +14,7 @@
 //! `Account.init(owner, pq_pubkey_hash, registry, policy)` on the new
 //! address.
 //!
-//! For the MVP we expose:
+//! This module exposes:
 //! - `init(impl, registry, policy)`  — wire dependencies once.
 //! - `create_account(owner, pq_pubkey_hash, user_salt)` — deploy + init.
 //! - `predict_address(owner, pq_pubkey_hash, user_salt)` — view.
@@ -223,7 +223,7 @@ fn nibble(c: u8) -> u8 {
 }
 
 fn has_code(_addr: Address) -> bool {
-    // stylus-sdk 0.6 does not expose `extcodesize`. For the MVP we always
+    // stylus-sdk 0.6 does not expose `extcodesize`. We always
     // attempt the deploy; a duplicate `create_account` for the same
     // (owner, pq_pubkey_hash, user_salt) will revert in `deploy_create2`,
     // which is acceptable behaviour. Replace with a real EXTCODESIZE check

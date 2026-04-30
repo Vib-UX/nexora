@@ -7,7 +7,7 @@
 //!
 //! Cancellation: owner (or current PQ holder via PQ sig) can `cancel_*`.
 //!
-//! For the MVP we keep the verifier path identical to validation.rs —
+//! The verifier path matches validation.rs —
 //! resolve via registry, then check `verify(hash, sig, pubkey)`.
 
 use alloc::vec::Vec;

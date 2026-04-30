@@ -60,14 +60,27 @@ export function AccountCard({ owner, balance, falconKp, deployments, onDisconnec
         <Card title="ECDSA owner (k1)">
           <div className="font-mono text-xs text-zinc-300">{owner}</div>
         </Card>
-        <Card title="PQ pubkey hash (Falcon-mock)">
+        <Card title="PQ pubkey hash (scheme 1)">
           <div className="font-mono text-xs text-zinc-300 break-all">
             {pqHash}
           </div>
         </Card>
         <Card title="Smart account">
           <div className="font-mono text-xs text-zinc-300">
-            {predicted ?? "not yet deployed"}
+            {deployments.account ? (
+              <>
+                <div className="text-emerald-400/90">deployed (demo)</div>
+                <div className="mt-1 break-all">{deployments.account}</div>
+                {predicted && predicted !== deployments.account && (
+                  <div className="mt-2 text-[10px] text-amber-400/90">
+                    Predicted from your Falcon key differs — send uses demo account above. Clear
+                    localStorage / match deploy seed to align.
+                  </div>
+                )}
+              </>
+            ) : (
+              predicted ?? "not yet deployed (set account in deployments or deploy via factory)"
+            )}
           </div>
         </Card>
         <Card title="Verifier registry">

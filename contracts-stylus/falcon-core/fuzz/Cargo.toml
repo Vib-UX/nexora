@@ -1,0 +1,28 @@
+[package]
+name = "nexora-falcon-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+falcon-rust = "0.1.2"
+nexora-falcon-core = { path = ".." }
+rand = "0.8"
+
+[[bin]]
+name = "verify_random_inputs"
+path = "fuzz_targets/verify_random_inputs.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "verify_perturbed_sig"
+path = "fuzz_targets/verify_perturbed_sig.rs"
+test = false
+doc = false
+
+[workspace]

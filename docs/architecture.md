@@ -1,4 +1,4 @@
-# Nexora — Architecture (MVP)
+# Nexora — Architecture
 
 > Companion to the source. Read this first. Intentionally
 > implementation-oriented; no marketing.
@@ -8,9 +8,9 @@
 Nexora is a custom Arbitrum Orbit L3 + a Stylus smart-account stack with a
 **hybrid ECDSA + post-quantum** validator gated by an on-chain policy
 engine. PQ verification is performed via a **stable interface address**
-resolved through a `VerifierRegistry`, so the backend (mock Falcon today,
-real Falcon-512 / Nitro precompile later) can be swapped without
-redeploying any wallets.
+resolved through a `VerifierRegistry`, so the backend (scheme 1 reference
+verifier, scheme 2 Falcon-512, or a future Nitro precompile) can be swapped
+without redeploying any wallets.
 
 ## 2. Layers
 
@@ -30,7 +30,7 @@ redeploying any wallets.
 │ NexoraAccount (Stylus)  — hybrid validator + execution   │
 │  ┌──────────────┐  ┌─────────────┐  ┌─────────────────┐  │
 │  │ PolicyEngine │  │ VerifierReg │→ │ IPQVerifier     │  │
-│  │              │  │ scheme→addr │  │ (mock Falcon-512│  │
+│  │              │  │ scheme→addr │  │ (Falcon-512 /   │  │
 │  └──────────────┘  └─────────────┘  └─────────────────┘  │
 └──────────────────────────────────────────────────────────┘
              ▲
@@ -47,7 +47,7 @@ redeploying any wallets.
 |---|---|
 | `chain/` | Orbit chain config + deploy modes (plan/local/execute) |
 | `contracts-stylus/shared` | Shared types + EIP-712 op-hash, no SDK deps |
-| `contracts-stylus/pq-verifier` | `IPQVerifier` impl, mock Falcon-512 |
+| `contracts-stylus/pq-verifier` | `IPQVerifier` impl, scheme 1 (FALCON_MOCK) |
 | `contracts-stylus/verifier-registry` | `scheme -> address` indirection |
 | `contracts-stylus/policy-engine` | LOW/HIGH/CRITICAL rule table |
 | `contracts-stylus/nexora-account` | The smart wallet (hybrid validator) |
@@ -89,16 +89,81 @@ Wallets never embed a verifier address. They always indirect through:
 verifier_registry.verifier(scheme) -> address
 ```
 
-Today (v1):
-- registry[FALCON_MOCK=1] = pq-verifier-stylus
+Currently registered (Phase 2 — what `scripts/deploy-all.ts` now wires up):
 
-Tomorrow (v2):
-- registry[FALCON_512=2] = real-falcon-stylus
+| scheme | id | impl                                      | encoding accepted |
+|--------|----|-------------------------------------------|-------------------|
+| FALCON_MOCK | 1 | `contracts-stylus/pq-verifier`         | `keccak256(pubkey || msgHash)` (deterministic reference verifier) |
+| FALCON_512  | 2 | `contracts-stylus/pq-verifier-falcon512` (real) | PQClean header `0x39` *and* `falcon-rust`/FIPS-206 standard-compressed `0x59` |
 
-Day 2 of production:
-- registry[FALCON_512=2] = 0x...c0 (Nitro precompile)
+Future swaps require **one transaction** (`registry.setVerifier(scheme, addr)`):
+
+| swap | what changes                                                    |
+|------|------------------------------------------------------------------|
+| Same on-chain semantics, different impl | `registry[FALCON_512] = newStylusContract` |
+| Onboard a Nitro precompile              | `registry[FALCON_512] = stylusShim`, where the shim does `RawCall(0x...c0, abi.encode(hash, sig, pubkey))` |
+| Add a new PQ algorithm (Dilithium, etc.) | new scheme id, new verifier; old wallets keep working |
 
 No wallet redeploy. No SDK change beyond bumping the default scheme.
+
+## 5a. PQ verifier — measurements
+
+Stylus activation (compressed WASM size + activation fee), measured via
+`cargo stylus check` on the local Nitro devnet:
+
+| crate | scheme | algorithm | wasm (compressed) | activation fee |
+|-------|--------|-----------|-------------------|----------------|
+| `pq-verifier`            | 1 | keccak reference | ~7  KB | trivial |
+| `pq-verifier-falcon512`  | 2 | **real Falcon-512 verify** | ~12.9 KB | ≈ 0.0001 ETH |
+
+`pq-verifier-falcon512` is a **verify-only** port of Falcon-512 covering
+SHAKE-256, hash-to-point, NTT mod q=12289, public-key + compressed-signature
+decode, and the `||(s1, s2)||² < bound` norm check. The implementation
+matches `falcon-rust`'s NTT convention (Algorithm 1 from
+[eprint 2016/504](https://eprint.iacr.org/2016/504.pdf)) with bit-reversed
+twiddles, so signatures produced by the host-side `falcon-rust` signer are
+accepted bit-exact.
+
+### Test surface
+
+| harness | location | what it pins |
+|---------|----------|---------------|
+| Interop  | `contracts-stylus/falcon-core/tests/interop.rs` | `falcon-rust` signs → our verify accepts; tampered/wrong-message rejected |
+| KAT      | `contracts-stylus/falcon-core/tests/kat.rs`     | Fixed-seed `(seed, hash) → sig` vectors; zero-sig, truncated-sig, bad-pk-header all rejected |
+| Fuzz     | `contracts-stylus/falcon-core/fuzz/`            | libFuzzer targets covering arbitrary inputs and signature perturbations |
+
+A future PR will switch the KAT harness over to the official PQClean
+Falcon-512 `.rsp` test vectors (their sig header is `0x39`; ours accepts
+both `0x39` and `0x59`, so the only adapter needed is reading the file).
+
+### Signing path
+
+| backend | where it runs | how |
+|---------|---------------|-----|
+| `signer/falcon-signer` (default) | host process | `pqcrypto-falcon`-style API via the `falcon-rust` crate (FIPS-206 compatible standard-compressed encoding); `--serve` exposes `POST /sign` for the dashboard / agent / relayer |
+| `signer/falcon-signer-wasm` (opt-in) | browser | `wasm-bindgen` build of the same crate, lazy-loaded by the dashboard when `NEXT_PUBLIC_FALCON512_BROWSER=1`. See `wallet-sdk/wasm/README.md` |
+
+Default local setup uses scheme 1 for zero extra dependencies. Setting
+`FALCON_SCHEME=2` on the agent or selecting Falcon-512 in the dashboard
+switches the SDK to scheme 2 and routes through the running signer daemon.
+
+## 5b. PQ verifier — roadmap
+
+We expose a Stylus contract today because that's the one place we
+fully control on Orbit. The path forward is:
+
+1. **Now (P1–P3, shipped):** real Falcon-512 verify in Stylus, registered
+   at scheme 2; scheme 1 remains the lightweight reference path for local workflows.
+2. **Next (P4, planned):** custom Nitro precompile at `0x...c0` exposing
+   `falcon512_verify(hash, sig, pubkey) -> bool`, implemented in Go inside
+   the Nitro fork using vector NTT + SHAKE intrinsics. The Stylus contract
+   shrinks to a 100-line shim (`RawCall(0xc0, ...)`); the registry update
+   is a single tx, and existing wallets see no change.
+3. **Long term (matches Vitalik's lattice-precompile +
+   recursive-aggregation roadmap):** drop the precompile entirely once
+   protocol-level recursive proof aggregation lands — verification becomes
+   "free" for the ground-truth proof and individual sigs never hit
+   on-chain compute. See `docs/eip8141-mapping.md`.
 
 ## 6. Replay protection
 
@@ -114,10 +179,10 @@ No wallet redeploy. No SDK change beyond bumping the default scheme.
 - Stylus SDK API is moving fast — pin to a known good version (`stylus-sdk = 0.6.0` here).
 - `cargo stylus deploy` output parsing in `scripts/deploy-all.ts` may need
   tweaks across versions (regex match on the success line).
-- Real Falcon-512 in pure WASM is heavy; mock-verifier is intentional in
-  v1 to ship the integration story end-to-end.
-- AnyTrust DAC means no L1 DA on parent — fine for hackathon, mark as
-  pre-production for serious deploys.
+- Falcon-512 in pure WASM has a measurable activation size budget; scheme 1
+  keeps local iteration fast while scheme 2 carries production-grade verify.
+- AnyTrust DAC means no L1 DA on parent — document as pre-production for
+  deployments that require full rollup data availability.
 
 ## 8. Forward-compat hooks
 

@@ -50,7 +50,7 @@
     "decimals": 18
   },
   "metadata": {
-    "description": "Nexora — post-quantum smart-wallet L3 (hackathon MVP).",
+    "description": "Nexora — post-quantum smart-wallet L3 on Arbitrum Orbit.",
     "website": "https://nexora.dev",
     "tags": ["orbit", "stylus", "post-quantum", "smart-wallet"]
   }

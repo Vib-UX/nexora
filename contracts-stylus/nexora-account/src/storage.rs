@@ -34,7 +34,7 @@ sol_storage! {
         bytes32 pending_pq_pubkey_hash;
         uint64  pending_pq_unlock_at;
 
-        /// Forward-compat: ERC-7579 module slots (not active in MVP).
+        /// Forward-compat: ERC-7579 module slots (reserved, not wired).
         address[] validators;
         address[] executors;
         address[] hooks;

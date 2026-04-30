@@ -10,7 +10,7 @@ import type { PqSig } from "../types.js";
 import { VerifierScheme } from "../types.js";
 
 /**
- * Falcon-512 fixed sizes (real algorithm). The mock keypair / sig must
+ * Falcon-512 fixed sizes (on-wire layout). Keypairs and signatures must
  * match these byte lengths so they pass `strict_lengths` checks in the
  * on-chain verifier.
  */
@@ -18,9 +18,10 @@ export const FALCON512_PUBKEY_BYTES = 897;
 export const FALCON512_SIG_BYTES = 666;
 
 /**
- * Mock Falcon-512 keypair. The "secret" here is just bytes that get
- * concatenated with the message to produce the deterministic tag
- * recognized by the on-chain mock verifier — DO NOT USE IN PRODUCTION.
+ * Scheme-1 (FALCON_MOCK) keypair for local and integration testing. The
+ * secret material is used only to derive a deterministic tag recognized by
+ * the scheme-1 on-chain verifier — use Falcon-512 (scheme 2) for production
+ * PQ verification.
  */
 export interface FalconMockKeypair {
   publicKey: Uint8Array;
@@ -29,7 +30,7 @@ export interface FalconMockKeypair {
 }
 
 /**
- * Generate a deterministic mock keypair from a 32-byte seed.
+ * Generate a deterministic scheme-1 keypair from a 32-byte seed.
  * The pubkey layout is `seed || pad-to-897` so different seeds yield
  * different commitments.
  */
@@ -52,7 +53,7 @@ export function randomFalconMockKeypair(): FalconMockKeypair {
 }
 
 /**
- * Produce a deterministic mock signature.
+ * Produce a deterministic scheme-1 signature.
  *
  * On-chain check is:
  *

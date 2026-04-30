@@ -2,13 +2,13 @@
 
 > Post-quantum smart-wallet stack on a custom **Arbitrum Orbit** chain, written in **Rust/Stylus**.
 
-Nexora is a vertically integrated, hackathon-grade MVP that:
+Nexora is a vertically integrated stack that:
 
 1. Launches a custom Arbitrum Orbit L3 chain.
-2. Exposes a programmable post-quantum (PQ) verifier path via a stable `IPQVerifier` registry (Stylus impl in v1, future Nitro precompile in v2 — same address).
+2. Exposes a programmable post-quantum (PQ) verifier path via a stable `IPQVerifier` registry (Stylus today, optional Nitro precompile later — swap via registry without redeploying wallets).
 3. Ships a Stylus smart-account (`NexoraAccount`) with an **ECDSA + PQ hybrid validator** gated by an on-chain `PolicyEngine` (LOW / HIGH / CRITICAL).
 4. Provides a TS `wallet-sdk`, a single-op sponsoring `relayer`, and a Next.js `dashboard`.
-5. Demonstrates an AI agent submitting risk-classified intents end-to-end.
+5. Supports automated agents submitting risk-classified intents end-to-end.
 
 See [`docs/architecture.md`](docs/architecture.md) for the full design and [`docs/demo-script.md`](docs/demo-script.md) for the judge-facing walkthrough.
 
@@ -49,7 +49,7 @@ pnpm --filter agent demo            # runs the agent intent walkthrough
 
 ## Status
 
-Hackathon MVP. Falcon verification is **mocked behind a stable interface** — swap to a real verifier without redeploying wallets. See `contracts-stylus/pq-verifier`.
+PQ verification is pluggable: scheme `1` (`FALCON_MOCK`) is a lightweight deterministic verifier for integration testing; scheme `2` (`FALCON_512`) is full Falcon-512 verification in Stylus. The `VerifierRegistry` maps scheme ids to contract addresses so implementations can be upgraded in one transaction. See `contracts-stylus/pq-verifier` and `contracts-stylus/pq-verifier-falcon512`.
 
 ## License
 

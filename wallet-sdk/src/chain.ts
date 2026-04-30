@@ -1,6 +1,6 @@
 import { defineChain, type Chain } from "viem";
 
-// MVP devnet uses Nitro's built-in dev chainId (0x64ABA / 412346).
+// Local devnet uses Nitro's built-in dev chainId (0x64ABA / 412346).
 // Production Orbit deployment will override this to a registered chainId.
 export const NEXORA_CHAIN_ID = 412346;
 
