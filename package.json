@@ -11,6 +11,7 @@
   "scripts": {
     "dev:up": "bash scripts/dev-up.sh",
     "deploy": "tsx scripts/deploy-all.ts",
+    "wasm:build": "bash scripts/build-wasm.sh",
     "build": "pnpm -r --parallel build",
     "lint": "pnpm -r --parallel lint",
     "test": "pnpm -r --parallel test",

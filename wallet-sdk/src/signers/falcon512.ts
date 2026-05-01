@@ -1,14 +1,20 @@
 /**
- * Real Falcon-512 signer. Mirrors the scheme-1 signer module API shape so the
- * `NexoraClient` can be configured to use either.
+ * Real Falcon-512 signer.
  *
- * The signer talks to a local HTTP service (see `signer/falcon-signer`) for
- * keygen/signing — running Falcon's full sampler in TS is impractical and
- * Stylus only needs to verify, not sign. The HTTP daemon caches the keypair
- * in memory.
+ * Two execution modes are supported:
  *
- * Default base URL: `http://127.0.0.1:9090`. Override per-call with
- * `opts.signerUrl`.
+ *  1. **Browser wasm** (default in the dashboard) — the
+ *     `signer/falcon-signer-wasm` crate compiled with `wasm-pack` runs
+ *     keygen and sign in the visitor's browser. The dashboard injects a
+ *     {@link Falcon512Adapter} that wraps the wasm bindings.
+ *
+ *  2. **Daemon HTTP** — the `signer/falcon-signer` Rust binary runs as a
+ *     local process and exposes `GET /pubkey` + `POST /sign`. Used by
+ *     Node-side callers (the agent, scripts) and as a browser fallback
+ *     when wasm fails to load.
+ *
+ * Both modes converge on the same {@link Falcon512Signer} surface, which
+ * the {@link NexoraClient} consumes.
  */
 
 import {
@@ -21,9 +27,6 @@ import {
 import type { PqSig } from "../types.js";
 import { VerifierScheme } from "../types.js";
 
-// Sizes are also exported from the scheme-1 signer module (same on-chain
-// shape). We re-export under namespaced names to avoid the duplicate-export
-// error from `signers/index.ts`.
 import {
   FALCON512_PUBKEY_BYTES as PK_LEN,
   FALCON512_SIG_BYTES as SIG_LEN,
@@ -33,11 +36,14 @@ export const FALCON512_REAL_PUBKEY_BYTES = PK_LEN;
 export const FALCON512_REAL_SIG_BYTES = SIG_LEN;
 
 export interface Falcon512Keypair {
-  /// 897-byte Falcon-512 public key (header `0x09` + 14-bit packed coeffs).
+  /** 897-byte Falcon-512 public key (header `0x09` + 14-bit packed coeffs). */
   publicKey: Uint8Array;
-  /// Logical handle pointing to the secret key. The actual secret never
-  /// leaves the signer daemon. Set to `"local"` when keys are loaded from a
-  /// local `keys.json` and `signerUrl` resolves to that daemon.
+  /**
+   * Logical handle pointing to the secret key. For the daemon backend this
+   * holds the daemon URL; for the browser-wasm backend it holds the
+   * localStorage key under which the secret is cached. The actual secret
+   * never travels through this object except via the {@link Falcon512Adapter}.
+   */
   secretRef: string;
 }
 
@@ -51,35 +57,163 @@ export interface Falcon512SignOpts {
 const DEFAULT_URL = "http://127.0.0.1:9090";
 
 /**
- * Fetch the daemon's pubkey + commitment. Useful at app startup so the
- * dashboard / agent knows what `pqPubkey` to attach to UserOps.
+ * Where Falcon-512 keygen / signing physically runs for a given session.
+ */
+export type Falcon512Source = "browser-wasm" | "daemon" | "external";
+
+/**
+ * Stateless adapter the SDK uses to talk to whichever Falcon-512 backend
+ * the host has wired up. Implementations are free to bring their own
+ * keystore (browser localStorage, OS keyring, HSM, ...).
+ */
+export interface Falcon512Adapter {
+  source: Falcon512Source;
+  /**
+   * Sign a 32-byte op hash. Implementations MUST return the canonical
+   * 666-byte Falcon-512 signature with the `0x39 || nonce || tail` PQClean
+   * layout (or the equivalent FIPS-206 `0x59` header — both are accepted by
+   * the on-chain verifier).
+   */
+  sign(opHash: Hex): Promise<Hex>;
+  /**
+   * 897-byte Falcon-512 public key. Used by the SDK to construct
+   * `pqPubkey` and by the dashboard to compute the `pqPubkeyHash`
+   * commitment.
+   */
+  getPublicKey(): Promise<Uint8Array>;
+}
+
+/**
+ * Unified signer. Carries the public key and a `sign()` method. The
+ * dashboard typically constructs this once after the user clicks
+ * "Generate keypair" and reuses it for every UserOp.
+ */
+export interface Falcon512Signer {
+  source: Falcon512Source;
+  publicKey: Uint8Array;
+  /** Returns a fully-formed `PqSig` ready to be ABI-packed into a UserOp. */
+  signOp(opHash: Hex): Promise<PqSig>;
+}
+
+/**
+ * Build a {@link Falcon512Signer} from an arbitrary adapter. The dashboard
+ * passes a wasm-backed adapter; the daemon helpers below produce one
+ * automatically.
+ */
+export async function makeFalcon512Signer(
+  adapter: Falcon512Adapter,
+): Promise<Falcon512Signer> {
+  const publicKey = await adapter.getPublicKey();
+  if (publicKey.length !== PK_LEN) {
+    throw new Error(
+      `falcon512 adapter returned bad pubkey length: ${publicKey.length} (expected ${PK_LEN})`,
+    );
+  }
+  const pubkeyHashHex = keccak256(bytesToHex(publicKey));
+  return {
+    source: adapter.source,
+    publicKey,
+    async signOp(opHash: Hex): Promise<PqSig> {
+      const sigHex = await adapter.sign(opHash);
+      const sigBytes = hexToBytes(sigHex);
+      if (sigBytes.length !== SIG_LEN) {
+        throw new Error(
+          `falcon512 adapter returned bad sig length: ${sigBytes.length} (expected ${SIG_LEN})`,
+        );
+      }
+      return {
+        scheme: VerifierScheme.Falcon512,
+        pubkeyHash: pubkeyHashHex,
+        sigBytes: bytesToHex(sigBytes),
+      };
+    },
+  };
+}
+
+/**
+ * Build a daemon-backed adapter. The daemon must already be serving
+ * `/pubkey` and `/sign` (see `signer/falcon-signer/src/main.rs`).
+ */
+export function makeDaemonFalcon512Adapter(
+  opts: Falcon512SignOpts = {},
+): Falcon512Adapter {
+  const baseUrl = opts.signerUrl ?? DEFAULT_URL;
+  const f = opts.fetchImpl ?? fetch;
+  let cached: Uint8Array | null = null;
+  return {
+    source: "daemon",
+    async getPublicKey(): Promise<Uint8Array> {
+      if (cached) return cached;
+      const r = await f(`${baseUrl}/pubkey`);
+      if (!r.ok) {
+        throw new Error(`falcon-signer GET /pubkey failed: ${r.status}`);
+      }
+      const j = (await r.json()) as {
+        pubkey: Hex;
+        commitment: Hex;
+        scheme: number;
+      };
+      if (j.scheme !== VerifierScheme.Falcon512) {
+        throw new Error(`unexpected scheme from signer: ${j.scheme}`);
+      }
+      const pk = hexToBytes(j.pubkey);
+      if (pk.length !== PK_LEN) {
+        throw new Error(
+          `bad pubkey length from daemon: ${pk.length} (expected ${PK_LEN})`,
+        );
+      }
+      cached = pk;
+      return pk;
+    },
+    async sign(opHash: Hex): Promise<Hex> {
+      const r = await f(`${baseUrl}/sign`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ hash: opHash }),
+      });
+      if (!r.ok) {
+        throw new Error(
+          `falcon-signer POST /sign failed: ${r.status} ${await r.text()}`,
+        );
+      }
+      const j = (await r.json()) as {
+        sig: Hex;
+        pubkey: Hex;
+        commitment: Hex;
+        error?: string;
+      };
+      if (j.error) {
+        throw new Error(`falcon-signer error: ${j.error}`);
+      }
+      const expected = await this.getPublicKey();
+      if (j.pubkey.toLowerCase() !== bytesToHex(expected).toLowerCase()) {
+        throw new Error(
+          "falcon-signer pubkey mismatch — daemon serves a different keypair",
+        );
+      }
+      return j.sig;
+    },
+  };
+}
+
+/**
+ * Convenience: ask the daemon for its current pubkey + return a
+ * {@link Falcon512Keypair} compatible with older SDK call sites.
  */
 export async function loadFalcon512Keypair(
   opts: Falcon512SignOpts = {},
 ): Promise<Falcon512Keypair> {
-  const url = (opts.signerUrl ?? DEFAULT_URL) + "/pubkey";
-  const f = opts.fetchImpl ?? fetch;
-  const r = await f(url);
-  if (!r.ok) {
-    throw new Error(`falcon-signer GET /pubkey failed: ${r.status}`);
-  }
-  const j = (await r.json()) as { pubkey: Hex; commitment: Hex; scheme: number };
-  if (j.scheme !== VerifierScheme.Falcon512) {
-    throw new Error(`unexpected scheme from signer: ${j.scheme}`);
-  }
-  const publicKey = hexToBytes(j.pubkey);
-  if (publicKey.length !== PK_LEN) {
-    throw new Error(`bad pubkey length: ${publicKey.length} (expected ${PK_LEN})`);
-  }
-  return { publicKey, secretRef: opts.signerUrl ?? DEFAULT_URL };
+  const adapter = makeDaemonFalcon512Adapter(opts);
+  const publicKey = await adapter.getPublicKey();
+  return {
+    publicKey,
+    secretRef: opts.signerUrl ?? DEFAULT_URL,
+  };
 }
 
 /**
- * Produce a real Falcon-512 signature over `opHash` (32 bytes).
- *
- * The signer daemon MUST be running and serving the same keypair whose
- * public key is in `kp.publicKey`. We sanity-check that the daemon's
- * pubkey matches `kp.publicKey` to catch desynced configurations.
+ * Back-compat helper. Prefer {@link makeFalcon512Signer} +
+ * {@link makeDaemonFalcon512Adapter} in new code.
  */
 export async function signFalcon512(
   opHash: Hex,
@@ -87,42 +221,25 @@ export async function signFalcon512(
   opts: Falcon512SignOpts = {},
 ): Promise<PqSig> {
   const baseUrl = opts.signerUrl ?? kp.secretRef ?? DEFAULT_URL;
-  const f = opts.fetchImpl ?? fetch;
-
-  const r = await f(`${baseUrl}/sign`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ hash: opHash }),
+  const adapter = makeDaemonFalcon512Adapter({
+    ...opts,
+    signerUrl: baseUrl,
   });
-  if (!r.ok) {
-    throw new Error(`falcon-signer POST /sign failed: ${r.status} ${await r.text()}`);
-  }
-  const j = (await r.json()) as {
-    sig: Hex;
-    pubkey: Hex;
-    commitment: Hex;
-    error?: string;
+  // Trust the caller's pubkey rather than refetching from the daemon —
+  // they already have it in the keypair.
+  const signer: Falcon512Signer = {
+    source: adapter.source,
+    publicKey: kp.publicKey,
+    async signOp(h: Hex): Promise<PqSig> {
+      const sigHex = await adapter.sign(h);
+      return {
+        scheme: VerifierScheme.Falcon512,
+        pubkeyHash: keccak256(bytesToHex(kp.publicKey)),
+        sigBytes: sigHex,
+      };
+    },
   };
-  if (j.error) {
-    throw new Error(`falcon-signer error: ${j.error}`);
-  }
-  // Sanity: daemon pubkey must match the configured one — otherwise we'd
-  // sign with a different key than the on-chain account expects.
-  const localPubHex = bytesToHex(kp.publicKey);
-  if (j.pubkey.toLowerCase() !== localPubHex.toLowerCase()) {
-    throw new Error(
-      "falcon-signer pubkey mismatch — daemon serves a different keypair",
-    );
-  }
-  const sigBytes = hexToBytes(j.sig);
-  if (sigBytes.length !== SIG_LEN) {
-    throw new Error(`bad signature length: ${sigBytes.length} (expected ${SIG_LEN})`);
-  }
-  return {
-    scheme: VerifierScheme.Falcon512,
-    pubkeyHash: keccak256(localPubHex),
-    sigBytes: bytesToHex(sigBytes),
-  };
+  return signer.signOp(opHash);
 }
 
 export function falcon512PubkeyCommitment(pk: Uint8Array): Hex {

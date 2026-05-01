@@ -1,38 +1,57 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   type Address,
   type Hex,
-  bytesToHex,
-  keccak256,
-  parseEther,
+  formatEther,
+  hexToBytes,
   isAddress,
   isHex,
-  zeroHash,
+  parseEther,
 } from "viem";
-import { useAccount, usePublicClient, useReadContract, useWalletClient } from "wagmi";
 import {
-  NexoraClient,
+  useAccount,
+  usePublicClient,
+  useWaitForTransactionReceipt,
+  useWalletClient,
+} from "wagmi";
+import {
   PolicyTag,
   VerifierScheme,
   abi,
+  computeOpHash,
+  encodeUserOp,
+  onchainClassify,
+  signers,
 } from "@nexora/wallet-sdk";
-import type {
-  Falcon512Keypair,
-  FalconMockKeypair,
-} from "@nexora/wallet-sdk/signers";
-import { loadFalcon512Keypair } from "@nexora/wallet-sdk/signers";
+import type { Falcon512Signer } from "@nexora/wallet-sdk/signers";
 import type { Deployments } from "@/lib/deployments";
-import { getFalcon512SignerUrl } from "@/lib/falcon512Storage";
+import {
+  type DashboardKeypairView,
+  resolveFalcon512Signer,
+} from "@/lib/falcon512Storage";
 
-interface Props {
-  owner: Address;
-  falconKp: FalconMockKeypair | null;
-  deployments: Deployments;
+const ADDR_ZERO = "0x0000000000000000000000000000000000000000" as Address;
+
+type Status = "idle" | "running" | "ok" | "error";
+
+interface StepView {
+  id: string;
+  label: string;
+  status: Status;
+  detail?: string;
+  ms?: number;
 }
 
-const SCHEME_STORAGE_KEY = "nexora.scheme.v1";
+const INITIAL_STEPS: StepView[] = [
+  { id: "classify", label: "1 · classify policy", status: "idle" },
+  { id: "build", label: "2 · build UserOp", status: "idle" },
+  { id: "ecdsa", label: "3 · sign ECDSA (owner)", status: "idle" },
+  { id: "pq", label: "4 · sign Falcon-512", status: "idle" },
+  { id: "submit", label: "5 · submit", status: "idle" },
+  { id: "confirm", label: "6 · confirm", status: "idle" },
+];
 
 const TAG_LABEL: Record<number, string> = {
   0: "LOW (ECDSA only)",
@@ -46,104 +65,60 @@ const TAG_CLASS: Record<number, string> = {
   2: "tag-critical",
 };
 
-/** Match `agent/src/intentDemo.ts` + policy engine thresholds (1 ETH → HIGH, 100 ETH → CRITICAL). */
 const DEMO_PRESETS = {
-  low: {
-    label: "LOW · ECDSA only",
-    valueEth: "0.001",
-    callData: "0x",
-  },
+  low: { label: "LOW · 0.001 ETH", valueEth: "0.001", callData: "0x" as Hex },
   high: {
-    label: "HIGH · ECDSA + PQ",
-    valueEth: "5",
+    label: "HIGH · 0.05 ETH + calldata",
+    valueEth: "0.05",
     callData: "0xa1b2c3d4" as Hex,
   },
   critical: {
-    label: "CRITICAL · PQ + timelock",
-    valueEth: "250",
+    label: "CRITICAL · 0.5 ETH",
+    valueEth: "0.5",
     callData: "0xdeadbeef" as Hex,
   },
 } as const;
 
-const ADDR_ZERO = "0x0000000000000000000000000000000000000000";
+interface Props {
+  owner: Address;
+  keypair: DashboardKeypairView | null;
+  account: Address | null;
+  accountDeployed: boolean;
+  accountBalance: bigint;
+  deployments: Deployments;
+  /// Render a small "fix this" hint next to disabled preconditions.
+  onJumpToStep?: (step: "keys" | "deploy" | "fund") => void;
+}
 
-export function SendForm({ owner, falconKp, deployments }: Props) {
+export function SendForm({
+  owner,
+  keypair,
+  account,
+  accountDeployed,
+  accountBalance,
+  deployments,
+  onJumpToStep,
+}: Props) {
   const { connector } = useAccount();
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
+
   const [target, setTarget] = useState<string>(deployments.bridgeMock);
   const [valueEth, setValueEth] = useState<string>("0.001");
   const [callData, setCallData] = useState<string>("0x");
-  const [status, setStatus] = useState<string>("idle");
-  const [tag, setTag] = useState<number | null>(null);
+  const [showLegacy, setShowLegacy] = useState<boolean>(false);
+  const [scheme, setScheme] = useState<VerifierScheme>(VerifierScheme.Falcon512);
+
+  const [steps, setSteps] = useState<StepView[]>(INITIAL_STEPS);
+  const [running, setRunning] = useState(false);
+  const [tag, setTag] = useState<PolicyTag | null>(null);
   const [txHash, setTxHash] = useState<Hex | null>(null);
-  const [scheme, setScheme] = useState<VerifierScheme>(VerifierScheme.FalconMock);
-  const [falcon512Kp, setFalcon512Kp] = useState<Falcon512Keypair | null>(null);
-  const [falcon512Status, setFalcon512Status] = useState<string>("");
+  const [opHash, setOpHash] = useState<Hex | null>(null);
+  const [pqSigSize, setPqSigSize] = useState<number | null>(null);
+  const [signerSource, setSignerSource] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Persist scheme choice across reloads.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = window.localStorage.getItem(SCHEME_STORAGE_KEY);
-    if (stored === String(VerifierScheme.Falcon512)) {
-      setScheme(VerifierScheme.Falcon512);
-    }
-  }, []);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(SCHEME_STORAGE_KEY, String(scheme));
-  }, [scheme]);
-
-  // When the user picks Falcon-512, fetch the daemon pubkey lazily.
-  useEffect(() => {
-    let cancelled = false;
-    if (scheme !== VerifierScheme.Falcon512) {
-      setFalcon512Status("");
-      return;
-    }
-    if (falcon512Kp) return;
-    const url = getFalcon512SignerUrl();
-    setFalcon512Status(`fetching pubkey from ${url}…`);
-    loadFalcon512Keypair({ signerUrl: url })
-      .then((kp) => {
-        if (cancelled) return;
-        setFalcon512Kp(kp);
-        setFalcon512Status(
-          `daemon ok · pubkey=${bytesToHex(kp.publicKey).slice(0, 14)}…`,
-        );
-      })
-      .catch((e: Error) => {
-        if (cancelled) return;
-        setFalcon512Status(`daemon unreachable: ${e.message}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [scheme, falcon512Kp]);
-
-  const ownerAccount = useMemo(() => walletClient?.account, [walletClient]);
-
-  const activePqKp =
-    scheme === VerifierScheme.Falcon512 ? falcon512Kp : falconKp;
-  const pqHash = activePqKp
-    ? keccak256(bytesToHex(activePqKp.publicKey))
-    : zeroHash;
-
-  const smartAccount = useReadContract({
-    address: deployments.accountFactory,
-    abi: abi.accountFactoryAbi,
-    functionName: "predictAddress",
-    args: [owner, pqHash, zeroHash],
-    query: {
-      enabled:
-        Boolean(activePqKp) &&
-        deployments.accountFactory !== "0x0000000000000000000000000000000000000000",
-    },
-  });
-
-  const accountAddress =
-    deployments.account ?? (smartAccount.data as Address | undefined);
-
+  // Pin the bridge placeholder as default target on mount/refresh.
   useEffect(() => {
     const b = deployments.bridgeMock;
     if (!b || b === ADDR_ZERO) return;
@@ -152,95 +127,263 @@ export function SendForm({ owner, falconKp, deployments }: Props) {
     );
   }, [deployments.bridgeMock]);
 
-  function applyPreset(key: keyof typeof DEMO_PRESETS) {
+  const txReceipt = useWaitForTransactionReceipt({ hash: txHash ?? undefined });
+  useEffect(() => {
+    if (!txHash) return;
+    if (txReceipt.isSuccess && txReceipt.data) {
+      patchStep("confirm", {
+        status: "ok",
+        detail: `block ${txReceipt.data.blockNumber} · gas ${txReceipt.data.gasUsed}`,
+      });
+    } else if (txReceipt.isError) {
+      patchStep("confirm", {
+        status: "error",
+        detail: txReceipt.error?.message ?? "receipt error",
+      });
+    }
+    // We intentionally don't depend on patchStep — it's stable from the ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [txHash, txReceipt.isSuccess, txReceipt.isError, txReceipt.data]);
+
+  // Stable patcher — keeps the running closure pinned to the latest setter.
+  const patchRef = useRef<(id: string, p: Partial<StepView>) => void>(
+    () => undefined,
+  );
+  patchRef.current = (id: string, p: Partial<StepView>) =>
+    setSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...p } : s)));
+  const patchStep = (id: string, p: Partial<StepView>) =>
+    patchRef.current(id, p);
+
+  function reset(): void {
+    setSteps(INITIAL_STEPS.map((s) => ({ ...s })));
+    setTag(null);
+    setTxHash(null);
+    setOpHash(null);
+    setPqSigSize(null);
+    setSignerSource(null);
+    setErrorMsg(null);
+  }
+
+  function applyPreset(key: keyof typeof DEMO_PRESETS): void {
     const p = DEMO_PRESETS[key];
     const t =
-      deployments.bridgeMock !== ADDR_ZERO
-        ? deployments.bridgeMock
-        : target;
+      deployments.bridgeMock !== ADDR_ZERO ? deployments.bridgeMock : target;
     setTarget(t);
     setValueEth(p.valueEth);
     setCallData(p.callData);
-    setTag(null);
-    setTxHash(null);
-    setStatus("idle");
+    reset();
   }
 
-  async function preview() {
-    if (!publicClient || !isAddress(target)) return;
-    const value = parseEth(valueEth);
-    const data = (isHex(callData) ? callData : "0x") as Hex;
-    const out = (await publicClient.readContract({
-      address: deployments.policyEngine,
-      abi: abi.policyEngineAbi,
-      functionName: "classify",
-      args: [owner, target as Address, value, data],
-    })) as number;
-    setTag(out);
-  }
+  // -------- Preconditions ------------------------------------------------
 
-  async function send() {
-    if (!walletClient || !ownerAccount || !publicClient) return;
-    if (!activePqKp) {
-      setStatus(
-        scheme === VerifierScheme.Falcon512
-          ? "error: Falcon-512 daemon not reachable — start `falcon-signer serve`"
-          : "error: scheme 1 keypair missing",
-      );
+  const valueWei = parseEthSafe(valueEth);
+  const balanceShort = valueWei + parseEther("0.0005") > accountBalance;
+
+  const preconditions: Array<{
+    ok: boolean;
+    label: string;
+    fix?: { label: string; step: "keys" | "deploy" | "fund" };
+  }> = [
+    {
+      ok: Boolean(keypair),
+      label: "Falcon-512 keypair generated",
+      fix: { label: "go to keygen", step: "keys" },
+    },
+    {
+      ok: accountDeployed,
+      label: "Smart account deployed",
+      fix: { label: "deploy account", step: "deploy" },
+    },
+    {
+      ok: !balanceShort,
+      label: `Account funded (≥ ${formatEther(valueWei + parseEther("0.0005"))} ETH)`,
+      fix: { label: "fund account", step: "fund" },
+    },
+  ];
+  const allOk = preconditions.every((p) => p.ok);
+
+  // -------- Send ---------------------------------------------------------
+
+  async function send(): Promise<void> {
+    if (running) return;
+    if (!walletClient || !walletClient.account || !publicClient) {
+      setErrorMsg("wallet client not ready");
       return;
     }
-    if (!accountAddress) {
-      setStatus("error: smart account address unavailable (check factory + key)");
-      return;
-    }
+    if (!account || !keypair) return;
     if (!isAddress(target)) {
-      setStatus("invalid target");
+      setErrorMsg("invalid target address");
       return;
     }
-    setStatus("preparing");
+    setRunning(true);
+    reset();
+    setErrorMsg(null);
+
+    const data: Hex = (isHex(callData) ? callData : "0x") as Hex;
+    const value = parseEthSafe(valueEth);
+
     try {
-      const client = new NexoraClient({
+      // 1. classify --------------------------------------------------------
+      patchStep("classify", { status: "running" });
+      const t1 = performance.now();
+      const policyTag = await onchainClassify(
         publicClient,
-        walletClient,
-        account: accountAddress,
-        policyEngine: deployments.policyEngine,
-        owner: ownerAccount,
-        pqKeypair: activePqKp,
-        scheme,
-        falcon512:
-          scheme === VerifierScheme.Falcon512
-            ? { signerUrl: getFalcon512SignerUrl() }
-            : undefined,
+        deployments.policyEngine,
+        account,
+        target as Address,
+        value,
+        data,
+      );
+      setTag(policyTag);
+      patchStep("classify", {
+        status: "ok",
+        detail: `${TAG_LABEL[policyTag]} · engine ${shorten(deployments.policyEngine)}`,
+        ms: Math.round(performance.now() - t1),
       });
-      const { txHash } = await client.execute({
+
+      // 2. build op --------------------------------------------------------
+      patchStep("build", { status: "running" });
+      const t2 = performance.now();
+      const channel = policyTag === PolicyTag.Low ? 0n : 1n;
+      const nextNonce = ((await publicClient.readContract({
+        address: account,
+        abi: abi.nexoraAccountAbi,
+        functionName: "getNonce",
+        args: [channel],
+      })) as bigint) + 1n;
+      const chainId = BigInt(await publicClient.getChainId());
+
+      const op = {
+        sender: account,
+        nonce: nextNonce,
         target: target as Address,
-        value: parseEth(valueEth),
-        callData: (isHex(callData) ? callData : "0x") as Hex,
+        value,
+        callData: data,
+        callGasLimit: 1_000_000n,
+        validUntil: 0n,
+        policyTag,
+        verifierScheme: scheme,
+        signatures: "0x" as Hex,
+      };
+      const computedOpHash = computeOpHash(op, chainId, account);
+      setOpHash(computedOpHash);
+      patchStep("build", {
+        status: "ok",
+        detail: `nonce=${nextNonce} · chain=${chainId} · opHash=${shorten(computedOpHash)}`,
+        ms: Math.round(performance.now() - t2),
       });
-      setTxHash(txHash);
-      setStatus("submitted");
+
+      // 3. sign ECDSA ------------------------------------------------------
+      let ecdsaSig = null;
+      if (policyTag === PolicyTag.Low || policyTag === PolicyTag.High) {
+        patchStep("ecdsa", { status: "running" });
+        const t3 = performance.now();
+        ecdsaSig = await signers.signEcdsaOpHash(
+          walletClient.account,
+          computedOpHash,
+        );
+        patchStep("ecdsa", {
+          status: "ok",
+          detail: `65 B · v=${ecdsaSig.v}`,
+          ms: Math.round(performance.now() - t3),
+        });
+      } else {
+        patchStep("ecdsa", { status: "ok", detail: "skipped (CRITICAL = PQ-only)" });
+      }
+
+      // 4. sign Falcon-512 -------------------------------------------------
+      let pqSig = null;
+      let pqPubkeyBytes: Uint8Array | null = null;
+      let signer: Falcon512Signer | null = null;
+      if (
+        policyTag === PolicyTag.High ||
+        policyTag === PolicyTag.Critical
+      ) {
+        patchStep("pq", { status: "running" });
+        const t4 = performance.now();
+        signer = await resolveFalcon512Signer();
+        setSignerSource(signer.source);
+        pqPubkeyBytes = signer.publicKey;
+        pqSig = await signer.signOp(computedOpHash);
+        const sigBytes = hexToBytes(pqSig.sigBytes).length;
+        setPqSigSize(sigBytes);
+        patchStep("pq", {
+          status: "ok",
+          detail: `${sigBytes} B real Falcon sig · source=${signer.source}`,
+          ms: Math.round(performance.now() - t4),
+        });
+      } else {
+        patchStep("pq", { status: "ok", detail: "skipped (LOW = ECDSA only)" });
+      }
+
+      const sigsHex = signers.encodeSignatures(ecdsaSig, pqSig);
+      op.signatures = sigsHex;
+
+      // 5. submit ----------------------------------------------------------
+      patchStep("submit", { status: "running" });
+      const t5 = performance.now();
+      const opBytes = encodeUserOp(op);
+      const pqPubkeyHex: Hex = pqPubkeyBytes
+        ? (`0x${Array.from(pqPubkeyBytes).map((b) => b.toString(16).padStart(2, "0")).join("")}` as Hex)
+        : ("0x" as Hex);
+
+      const sentTx = await walletClient.writeContract({
+        address: account,
+        abi: abi.nexoraAccountAbi,
+        functionName: "executeUserOp",
+        args: [opBytes, pqPubkeyHex],
+        account: walletClient.account,
+        chain: walletClient.chain,
+        value,
+      });
+      setTxHash(sentTx);
+      patchStep("submit", {
+        status: "ok",
+        detail: `tx ${shorten(sentTx)}`,
+        ms: Math.round(performance.now() - t5),
+      });
+
+      // 6. confirm — handled by the useWaitForTransactionReceipt effect.
+      patchStep("confirm", { status: "running" });
     } catch (e) {
-      setStatus(`error: ${(e as Error).message}`);
+      const msg = (e as Error).message ?? String(e);
+      setErrorMsg(msg);
+      // Mark whichever step is currently "running" as failed.
+      setSteps((prev) =>
+        prev.map((s) => (s.status === "running" ? { ...s, status: "error", detail: msg } : s)),
+      );
+    } finally {
+      setRunning(false);
     }
   }
 
   return (
     <div className="rounded-xl border border-nexora-border bg-nexora-card p-6">
-      <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-        Send transaction
-      </h3>
-      <p className="mt-2 text-xs text-zinc-500">
-        Demo presets match the policy engine: &gt;1 ETH → HIGH, &gt;100 ETH → CRITICAL. HIGH uses
-        non-empty calldata so the 4-byte prefix can trigger HIGH rules on some configs.
-      </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
+            4 · Send transaction
+          </h3>
+          <p className="mt-2 text-xs text-zinc-500">
+            Demo presets exercise each policy band. HIGH and CRITICAL paths
+            both run real Falcon-512 signing client-side and on-chain
+            verification.
+          </p>
+        </div>
+        <SchemeBadge scheme={scheme} />
+      </div>
+
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <PresetBtn onClick={() => applyPreset("low")} title="Small transfer — ECDSA only">
+        <PresetBtn onClick={() => applyPreset("low")} title="ECDSA only">
           {DEMO_PRESETS.low.label}
         </PresetBtn>
-        <PresetBtn onClick={() => applyPreset("high")} title="Bridge-style — ECDSA + PQ (scheme 1)">
+        <PresetBtn onClick={() => applyPreset("high")} title="ECDSA + Falcon-512">
           {DEMO_PRESETS.high.label}
         </PresetBtn>
-        <PresetBtn onClick={() => applyPreset("critical")} title="Treasury-sized — PQ + timelock channel">
+        <PresetBtn
+          onClick={() => applyPreset("critical")}
+          title="Falcon-512 + 60s timelock channel"
+        >
           {DEMO_PRESETS.critical.label}
         </PresetBtn>
         <div className="ml-auto flex items-center gap-2">
@@ -252,7 +395,6 @@ export function SendForm({ owner, falconKp, deployments }: Props) {
             value={scheme}
             onChange={(e) => setScheme(Number(e.target.value) as VerifierScheme)}
           >
-            <option value={VerifierScheme.FalconMock}>FALCON_MOCK · scheme 1</option>
             <option
               value={VerifierScheme.Falcon512}
               disabled={
@@ -260,14 +402,29 @@ export function SendForm({ owner, falconKp, deployments }: Props) {
                 deployments.pqVerifierFalcon512 === ADDR_ZERO
               }
             >
-              Falcon-512 real (2)
+              Falcon-512 · scheme 2 (real)
             </option>
+            {showLegacy && (
+              <option value={VerifierScheme.FalconMock}>
+                FALCON_MOCK · scheme 1 (legacy)
+              </option>
+            )}
           </select>
+          <label className="flex items-center gap-1 text-[10px] text-zinc-500">
+            <input
+              type="checkbox"
+              className="accent-nexora-accent"
+              checked={showLegacy}
+              onChange={(e) => {
+                setShowLegacy(e.target.checked);
+                if (!e.target.checked) setScheme(VerifierScheme.Falcon512);
+              }}
+            />
+            show legacy
+          </label>
         </div>
       </div>
-      {scheme === VerifierScheme.Falcon512 && falcon512Status && (
-        <p className="mt-2 text-[11px] text-amber-400/80 font-mono">{falcon512Status}</p>
-      )}
+
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Field label="Target">
           <input
@@ -294,47 +451,129 @@ export function SendForm({ owner, falconKp, deployments }: Props) {
         </Field>
         <Field label="Predicted tag">
           {tag === null ? (
-            <span className="text-xs text-zinc-500">— preview to classify</span>
+            <span className="text-xs text-zinc-500">— run send to classify</span>
           ) : (
-            <span className={`inline-block rounded-md px-2 py-1 text-xs ${TAG_CLASS[tag]}`}>
+            <span
+              className={`inline-block rounded-md px-2 py-1 text-xs ${TAG_CLASS[tag]}`}
+            >
               {TAG_LABEL[tag]}
             </span>
           )}
         </Field>
       </div>
 
-      <div className="mt-4 flex items-center gap-3">
-        <button
-          className="rounded-md border border-nexora-border px-4 py-2 text-sm hover:border-nexora-accent"
-          onClick={preview}
-        >
-          Classify
-        </button>
-        <button
-          className="rounded-md bg-nexora-accent px-4 py-2 text-sm font-medium text-white"
-          onClick={send}
-          disabled={!walletClient || !connector || !accountAddress}
-        >
-          Sign &amp; send
-        </button>
-        <span className="text-xs text-zinc-500 font-mono">{status}</span>
+      <div className="mt-5 rounded-md border border-nexora-border bg-zinc-900/30 p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+            Pipeline
+          </span>
+          {pqSigSize !== null && (
+            <span className="text-[10px] font-mono text-emerald-400">
+              {pqSigSize} B Falcon sig + 65 B ECDSA submitted
+            </span>
+          )}
+        </div>
+        <ol className="mt-3 space-y-1.5">
+          {steps.map((s) => (
+            <li key={s.id} className="flex items-baseline gap-3 text-xs">
+              <StepDot status={s.status} />
+              <span className="w-44 shrink-0 font-mono text-zinc-300">
+                {s.label}
+              </span>
+              <span className="flex-1 truncate text-zinc-500 font-mono">
+                {s.detail ?? "—"}
+              </span>
+              {s.ms !== undefined && (
+                <span className="shrink-0 text-[10px] text-zinc-600 font-mono">
+                  {s.ms} ms
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+        {opHash && (
+          <div className="mt-3 break-all border-t border-nexora-border pt-2 font-mono text-[11px] text-zinc-500">
+            opHash {opHash}
+          </div>
+        )}
+        {signerSource && (
+          <div className="mt-1 text-[11px] text-zinc-500">
+            signer source ·{" "}
+            <span className="font-mono text-emerald-400">{signerSource}</span>
+          </div>
+        )}
       </div>
 
-      {txHash && (
-        <div className="mt-4 break-all rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 font-mono text-xs text-emerald-300">
-          tx: {txHash}
+      {!allOk && (
+        <ul className="mt-4 space-y-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200">
+          {preconditions
+            .filter((p) => !p.ok)
+            .map((p) => (
+              <li key={p.label} className="flex items-center gap-2">
+                <span>•</span>
+                <span>{p.label}</span>
+                {p.fix && onJumpToStep && (
+                  <button
+                    type="button"
+                    onClick={() => onJumpToStep(p.fix!.step)}
+                    className="ml-auto rounded border border-amber-500/40 px-2 py-0.5 text-[10px] uppercase tracking-wider text-amber-300 hover:bg-amber-500/10"
+                  >
+                    {p.fix.label}
+                  </button>
+                )}
+              </li>
+            ))}
+        </ul>
+      )}
+
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          className="rounded-md bg-nexora-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          onClick={send}
+          disabled={!walletClient || !connector || !allOk || running}
+        >
+          {running ? "Signing & submitting…" : "Sign & send"}
+        </button>
+        {txHash && (
+          <span className="break-all font-mono text-[11px] text-emerald-300">
+            {txHash}
+          </span>
+        )}
+      </div>
+
+      {errorMsg && (
+        <div className="mt-3 break-all rounded-md border border-amber-500/40 bg-amber-500/5 p-3 font-mono text-xs text-amber-300">
+          {errorMsg}
         </div>
       )}
 
       <div className="mt-4 text-xs text-zinc-500">
-        <span className={`mr-1 inline-block rounded px-1.5 py-0.5 ${TAG_CLASS[PolicyTag.Low]}`}>LOW</span>
+        <span className={`mr-1 inline-block rounded px-1.5 py-0.5 ${TAG_CLASS[PolicyTag.Low]}`}>
+          LOW
+        </span>
         ECDSA only ·
-        <span className={`mx-1 inline-block rounded px-1.5 py-0.5 ${TAG_CLASS[PolicyTag.High]}`}>HIGH</span>
+        <span className={`mx-1 inline-block rounded px-1.5 py-0.5 ${TAG_CLASS[PolicyTag.High]}`}>
+          HIGH
+        </span>
         ECDSA + PQ ·
-        <span className={`ml-1 inline-block rounded px-1.5 py-0.5 ${TAG_CLASS[PolicyTag.Critical]}`}>CRITICAL</span>
+        <span className={`ml-1 inline-block rounded px-1.5 py-0.5 ${TAG_CLASS[PolicyTag.Critical]}`}>
+          CRITICAL
+        </span>
         PQ + 60s timelock
       </div>
     </div>
+  );
+}
+
+function StepDot({ status }: { status: Status }) {
+  const map: Record<Status, string> = {
+    idle: "bg-zinc-700",
+    running: "bg-amber-400 animate-pulse",
+    ok: "bg-emerald-400",
+    error: "bg-red-500",
+  };
+  return (
+    <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${map[status]}`} />
   );
 }
 
@@ -368,7 +607,30 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function parseEth(s: string): bigint {
+function SchemeBadge({ scheme }: { scheme: VerifierScheme }) {
+  const palette =
+    scheme === VerifierScheme.Falcon512
+      ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+      : "border-amber-500/40 bg-amber-500/10 text-amber-300";
+  const label =
+    scheme === VerifierScheme.Falcon512
+      ? "scheme 2 · Falcon-512"
+      : `scheme ${scheme} · legacy`;
+  return (
+    <span
+      className={`shrink-0 rounded-md border px-2 py-1 text-[10px] uppercase tracking-wider ${palette}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function shorten(h: string): string {
+  if (h.length <= 14) return h;
+  return `${h.slice(0, 8)}…${h.slice(-6)}`;
+}
+
+function parseEthSafe(s: string): bigint {
   if (!s) return 0n;
   try {
     return parseEther(s as `${number}`);
@@ -376,7 +638,3 @@ function parseEth(s: string): bigint {
     return 0n;
   }
 }
-
-// Anchors zeroHash so the tag class doesn't get tree-shaken when CSS
-// is generated only from JS (Tailwind safelisting is handled in CSS).
-void zeroHash;

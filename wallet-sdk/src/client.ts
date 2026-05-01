@@ -24,6 +24,7 @@ import {
 import {
   type Falcon512Keypair,
   type Falcon512SignOpts,
+  type Falcon512Signer,
   signFalcon512,
 } from "./signers/falcon512.js";
 import { encodeSignatures } from "./signers/envelope.js";
@@ -53,6 +54,13 @@ export interface NexoraClientConfig {
   relayerUrl?: string;
   /// Optional Falcon-512 signer-daemon options (URL, fetch override).
   falcon512?: Falcon512SignOpts;
+  /**
+   * Optional pre-built Falcon-512 signer (browser-wasm or external HSM).
+   * When set, takes precedence over the daemon-based default. The signer's
+   * `publicKey` MUST match `pqKeypair.publicKey` for scheme 2 — the SDK
+   * does not re-fetch keys here.
+   */
+  falcon512Signer?: Falcon512Signer;
 }
 
 export interface BuildOpInput {
@@ -80,6 +88,11 @@ export class NexoraClient {
   /// Dispatch PQ signing to the configured backend (scheme 1 vs Falcon-512).
   private async signPq(opHash: Hex, scheme: VerifierScheme): Promise<PqSig> {
     if (scheme === VerifierScheme.Falcon512) {
+      // Prefer an injected signer (browser wasm, HSM, ...). Fall back to
+      // the daemon path bound to `pqKeypair`.
+      if (this.config.falcon512Signer) {
+        return this.config.falcon512Signer.signOp(opHash);
+      }
       return signFalcon512(
         opHash,
         this.config.pqKeypair as Falcon512Keypair,

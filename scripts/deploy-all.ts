@@ -225,44 +225,52 @@ async function main() {
     ),
   );
 
-  // 7. AccountFactory.createAccount(deployer, pqPubkeyHash, salt)
-  // Same 32-byte seed as agent/intentDemo.ts so agent PQ keys align with
-  // the on-chain commitment.
-  const seed = new Uint8Array(32).fill(0x42);
-  const falconKp = falconMockKeypairFromSeed(seed);
-  const pqPubkeyHash = falconPubkeyCommitment(falconKp.publicKey);
-  console.log(`\n[deploy] creating demo account (pqPubkeyHash=${pqPubkeyHash})`);
+  // 7. (optional) Pre-create a scheme-1 demo account for `pnpm agent:demo`.
+  //    The dashboard NEVER consumes this account — it always derives a
+  //    fresh predicted address from the user's Falcon-512 public key. We
+  //    only persist it under `deployments.json` (root) for the agent demo.
+  if (process.env.NEXORA_SKIP_AGENT_ACCOUNT !== "1") {
+    const seed = new Uint8Array(32).fill(0x42);
+    const falconKp = falconMockKeypairFromSeed(seed);
+    const pqPubkeyHash = falconPubkeyCommitment(falconKp.publicKey);
+    console.log(
+      `\n[deploy] creating agent-demo account (pqPubkeyHash=${pqPubkeyHash})`,
+    );
 
-  const predicted = (await publicClient.readContract({
-    address: dep.accountFactory,
-    abi: abi.accountFactoryAbi,
-    functionName: "predictAddress",
-    args: [deployer.address, pqPubkeyHash, zeroHash],
-  })) as Address;
-  console.log(`  predicted account = ${predicted}`);
+    const predicted = (await publicClient.readContract({
+      address: dep.accountFactory,
+      abi: abi.accountFactoryAbi,
+      functionName: "predictAddress",
+      args: [deployer.address, pqPubkeyHash, zeroHash],
+    })) as Address;
+    console.log(`  predicted account = ${predicted}`);
 
-  const createTx = await walletClient.writeContract({
-    address: dep.accountFactory,
-    abi: abi.accountFactoryAbi,
-    functionName: "createAccount",
-    args: [deployer.address, pqPubkeyHash, zeroHash],
-  });
-  await publicClient.waitForTransactionReceipt({ hash: createTx });
-  console.log(`  created via ${createTx}`);
+    const createTx = await walletClient.writeContract({
+      address: dep.accountFactory,
+      abi: abi.accountFactoryAbi,
+      functionName: "createAccount",
+      args: [deployer.address, pqPubkeyHash, zeroHash],
+    });
+    await publicClient.waitForTransactionReceipt({ hash: createTx });
+    console.log(`  created via ${createTx}`);
 
-  // Fund the account so it can pay out value. We call the wallet's payable
-  // `fund()` method since stylus 0.6 doesn't support `receive()`.
-  const fundSelector = (keccak256(toHex("fund()")) as Hex).slice(0, 10) as Hex;
-  const fundTx = await walletClient.sendTransaction({
-    to: predicted,
-    value: parseEther("500"),
-    data: fundSelector,
-  });
-  await publicClient.waitForTransactionReceipt({ hash: fundTx });
-  console.log(`  funded with 500 ETH (${fundTx})`);
+    // Fund the account so it can pay out value. We call the wallet's
+    // payable `fund()` method since stylus 0.6 doesn't support
+    // `receive()`.
+    const fundSelector = (keccak256(toHex("fund()")) as Hex).slice(0, 10) as Hex;
+    const fundTx = await walletClient.sendTransaction({
+      to: predicted,
+      value: parseEther("500"),
+      data: fundSelector,
+    });
+    await publicClient.waitForTransactionReceipt({ hash: fundTx });
+    console.log(`  funded with 500 ETH (${fundTx})`);
 
-  dep.account = predicted;
-  dep.pqPubkeyHash = pqPubkeyHash;
+    dep.account = predicted;
+    dep.pqPubkeyHash = pqPubkeyHash;
+  } else {
+    console.log("\n[deploy] skipping agent-demo account (NEXORA_SKIP_AGENT_ACCOUNT=1)");
+  }
 
   // ---- Persist ---------------------------------------------------------
   const outDir = ROOT;
@@ -283,8 +291,12 @@ async function main() {
       accountImplementation,
       accountFactory,
       bridgeMock,
-      account,
     } = dep;
+    // Intentionally exclude `account` and `pqPubkeyHash`: the dashboard
+    // brings its own Falcon-512 keys and derives a fresh address via
+    // `AccountFactory.predict_address`. Pre-baking an address here would
+    // re-introduce the "demo account" that the user can never re-deploy
+    // from their browser keypair.
     writeFileSync(
       dashboardPublic,
       JSON.stringify(
@@ -297,7 +309,6 @@ async function main() {
           accountImplementation,
           accountFactory,
           bridgeMock,
-          account,
         },
         null,
         2,

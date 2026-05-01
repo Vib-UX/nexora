@@ -16,6 +16,14 @@ target/
 Cargo.lock
 *.wasm
 
+# Generated wasm-bindgen build output (rebuilt via `pnpm wasm:build`).
+# We commit a copy under dashboard/public/wasm/falcon512/ so the demo runs
+# without forcing visitors to install wasm-pack — see the un-ignore below.
+wallet-sdk/wasm/falcon512/
+!dashboard/public/wasm/
+!dashboard/public/wasm/**
+!dashboard/public/wasm/**/*.wasm
+
 # Editor
 .idea/
 .vscode/

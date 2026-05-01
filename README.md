@@ -39,17 +39,53 @@ nexora/
 
 ```bash
 pnpm install
-./scripts/dev-up.sh                 # boot local Orbit-style devnet
+./scripts/dev-up.sh                       # boot local Orbit-style devnet
 pnpm --filter wallet-sdk build
-pnpm tsx scripts/deploy-all.ts      # deploys Stylus contracts, writes deployments.json
-pnpm --filter dashboard dev         # http://localhost:3000
-pnpm --filter relayer dev           # http://localhost:8787
-pnpm --filter agent demo            # runs the agent intent walkthrough
+DEPLOYER_PRIVATE_KEY=0x... pnpm deploy    # deploys Stylus contracts, writes deployments.json
+pnpm dashboard:dev                        # http://localhost:3000
+```
+
+The dashboard is the primary demo surface: connect MetaMask, generate a
+Falcon-512 keypair in your browser, deploy your smart account, fund it,
+and exercise LOW / HIGH / CRITICAL policy bands. The Falcon-512 wasm
+bundle ships under `dashboard/public/wasm/falcon512/`; rebuild only when
+`signer/falcon-signer-wasm` changes:
+
+```bash
+pnpm wasm:build      # requires `cargo install wasm-pack`
+```
+
+See [`docs/demo-script.md`](docs/demo-script.md) for the full
+walkthrough and [`docs/dashboard-flow.md`](docs/dashboard-flow.md) for a
+card-by-card description of the on-chain effect.
+
+### Optional services
+
+```bash
+pnpm relayer:dev                          # http://localhost:8787, sponsor-relayed UserOps
+pnpm agent:demo                           # runs the agent intent walkthrough
+```
+
+For offline / non-wasm browsers, the local Falcon-512 signer daemon
+serves keys + signing over HTTP:
+
+```bash
+cd signer/falcon-signer
+cargo run --release -- keygen --out keys.json
+cargo run --release -- serve --keys keys.json --addr 127.0.0.1:9090
 ```
 
 ## Status
 
-PQ verification is pluggable: scheme `1` (`FALCON_MOCK`) is a lightweight deterministic verifier for integration testing; scheme `2` (`FALCON_512`) is full Falcon-512 verification in Stylus. The `VerifierRegistry` maps scheme ids to contract addresses so implementations can be upgraded in one transaction. See `contracts-stylus/pq-verifier` and `contracts-stylus/pq-verifier-falcon512`.
+PQ verification is pluggable. Scheme `2` (`FALCON_512`) is full
+Falcon-512 verification in Stylus and is the default in the dashboard
+and the SDK; scheme `1` (`FALCON_MOCK`) is a lightweight deterministic
+verifier kept for integration testing. The `VerifierRegistry` maps
+scheme ids to contract addresses so implementations can be upgraded in
+one transaction. See `contracts-stylus/pq-verifier-falcon512` (real
+verifier), `contracts-stylus/falcon-core` (verify-only Rust port +
+KAT/fuzz harness), and the precompile roadmap in
+[`docs/falcon-precompile-roadmap.md`](docs/falcon-precompile-roadmap.md).
 
 ## License
 

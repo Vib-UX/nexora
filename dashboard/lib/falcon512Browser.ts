@@ -1,64 +1,54 @@
 "use client";
 
-import {
-  type Falcon512Keypair,
-  type Falcon512SignOpts,
-} from "@nexora/wallet-sdk/signers";
-import {
-  hexToBytes,
-  bytesToHex,
-  keccak256,
-  type Hex,
-} from "viem";
-import { FALCON512_BROWSER_ENABLED, getFalcon512SignerUrl } from "./falcon512Storage";
+import { type Hex, hexToBytes } from "viem";
+import type { Falcon512Adapter } from "@nexora/wallet-sdk/signers";
 
 /**
- * Browser-side wasm-bindgen Falcon-512 signer (opt-in).
+ * Browser-side Falcon-512 signer.
  *
- * When `NEXT_PUBLIC_FALCON512_BROWSER=1` is set, lazy-load the wasm bundle
- * built from `signer/falcon-signer-wasm` and use it for signing. Otherwise
- * fall back to the local HTTP daemon.
+ * The dashboard ships a pre-built `wasm-bindgen` bundle under
+ * `dashboard/public/wasm/falcon512/` (built from
+ * `signer/falcon-signer-wasm`). We load it lazily on first use via a
+ * runtime dynamic import marked with `webpackIgnore` so Next.js does not
+ * try to resolve the absolute path at build time.
  *
- * The bundle is expected at `@nexora/wallet-sdk/wasm/...` — see
- * `wallet-sdk/wasm/README.md` for build instructions. The dynamic import is
- * wrapped in a `try`/`catch` so the dashboard still renders if the bundle
- * hasn't been built.
+ * If loading fails (older browser, file:// origin, asset moved, etc.),
+ * the dashboard transparently falls back to the local `falcon-signer`
+ * HTTP daemon — see `dashboard/lib/falcon512Storage.ts`.
  */
 
+interface WasmKeygenResult {
+  publicKey: string;
+  secretKey: string;
+  commitment: string;
+}
+
 interface WasmModule {
-  keygen: (seed_hex: string) => {
-    publicKey: string;
-    secretKey: string;
-    commitment: string;
-  };
+  default: (input?: string | URL | Request | Response) => Promise<unknown>;
+  keygen: (seed_hex: string) => WasmKeygenResult;
   sign: (secret_key_hex: string, hash_hex: string) => string;
 }
+
+const WASM_JS_URL = "/wasm/falcon512/nexora_falcon512.js";
+const WASM_BIN_URL = "/wasm/falcon512/nexora_falcon512_bg.wasm";
 
 let wasmPromise: Promise<WasmModule | null> | null = null;
 
 async function loadWasm(): Promise<WasmModule | null> {
-  if (!FALCON512_BROWSER_ENABLED) return null;
+  if (typeof window === "undefined") return null;
   if (wasmPromise) return wasmPromise;
   wasmPromise = (async () => {
     try {
-      // The wasm bundle is opt-in; @nexora/wallet-sdk does not declare a
-      // hard import dependency on it. We use a runtime dynamic import
-      // wrapped in a `Function` indirection so bundlers don't try to
-      // resolve the path at compile time when the bundle isn't built yet.
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval, no-new-func
-      const dynImport = new Function("p", "return import(p)") as (
-        p: string,
-      ) => Promise<unknown>;
-      const mod = (await dynImport(
-        "@nexora/wallet-sdk/wasm/nexora_falcon_signer_wasm.js",
-      )) as { default?: () => Promise<unknown> } & WasmModule;
-      if (typeof mod.default === "function") {
-        await mod.default();
-      }
-      return mod as WasmModule;
+      const mod = (await import(
+        /* webpackIgnore: true */ /* @vite-ignore */ WASM_JS_URL
+      )) as WasmModule;
+      // wasm-bindgen `--target web` requires an explicit `init(url)` call
+      // before any export is usable.
+      await mod.default(WASM_BIN_URL);
+      return mod;
     } catch (e) {
       console.warn(
-        "[falcon512Browser] wasm bundle not available, falling back to daemon:",
+        "[falcon512Browser] wasm bundle not available, daemon fallback will be used:",
         e,
       );
       return null;
@@ -68,53 +58,81 @@ async function loadWasm(): Promise<WasmModule | null> {
 }
 
 /**
- * Browser-side keygen (only used when the wasm path is enabled). Falls back
- * to the daemon's `/pubkey` if wasm is unavailable.
+ * Has the wasm bundle loaded successfully? Used by UI badges to display
+ * `signer source: browser-wasm` vs `daemon`.
  */
-export async function browserKeygenFalcon512(
-  seedHex: Hex,
-): Promise<Falcon512Keypair | null> {
-  const wasm = await loadWasm();
-  if (!wasm) return null;
-  const r = wasm.keygen(seedHex);
+export async function isWasmAvailable(): Promise<boolean> {
+  const m = await loadWasm();
+  return m !== null;
+}
+
+export interface BrowserKeypair {
+  publicKey: Uint8Array; // 897 bytes
+  secretKeyHex: Hex; // 1281-byte Falcon-512 secret, hex-encoded with 0x prefix
+  commitment: Hex; // keccak256(publicKey)
+}
+
+function randomSeedHex(): Hex {
+  const seed = new Uint8Array(32);
+  crypto.getRandomValues(seed);
+  let s = "0x";
+  for (const b of seed) s += b.toString(16).padStart(2, "0");
+  return s as Hex;
+}
+
+/**
+ * Generate a fresh Falcon-512 keypair entirely in the browser using the
+ * `wasm-bindgen` bundle. Throws if the bundle failed to load — callers can
+ * surface that and ask the user to use the daemon fallback.
+ */
+export async function generateBrowserKeypair(): Promise<BrowserKeypair> {
+  const mod = await loadWasm();
+  if (!mod) {
+    throw new Error(
+      "Falcon-512 wasm bundle is not available in this browser. " +
+        "Falling back to the local falcon-signer daemon.",
+    );
+  }
+  const seedHex = randomSeedHex();
+  const r = mod.keygen(seedHex);
   return {
     publicKey: hexToBytes(r.publicKey as Hex),
-    secretRef: r.secretKey,
+    secretKeyHex: r.secretKey as Hex,
+    commitment: r.commitment as Hex,
   };
 }
 
 /**
- * Returns a `Falcon512SignOpts.fetchImpl` that, when wasm is loaded, signs
- * locally instead of POSTing to the daemon. The shape conforms to the daemon
- * response so the existing `signFalcon512` SDK function works unchanged.
+ * Sign a 32-byte op hash with the given secret key. Returns the canonical
+ * 666-byte Falcon-512 signature, hex-encoded.
  */
-export function browserFalcon512Opts(
-  kp: Falcon512Keypair,
-  fallbackUrl: string = getFalcon512SignerUrl(),
-): Falcon512SignOpts {
-  if (!FALCON512_BROWSER_ENABLED) return { signerUrl: fallbackUrl };
+export async function signFalcon512Browser(
+  opHash: Hex,
+  secretKeyHex: Hex,
+): Promise<Hex> {
+  const mod = await loadWasm();
+  if (!mod) {
+    throw new Error("Falcon-512 wasm bundle not available");
+  }
+  return mod.sign(secretKeyHex, opHash) as Hex;
+}
+
+/**
+ * Build a {@link Falcon512Adapter} backed by the browser-wasm bundle. The
+ * adapter holds the secret key in a closure for the lifetime of the page;
+ * persistence is the caller's responsibility (see
+ * `dashboard/lib/falcon512Storage.ts`).
+ */
+export function makeBrowserFalcon512Adapter(
+  kp: BrowserKeypair,
+): Falcon512Adapter {
   return {
-    signerUrl: fallbackUrl,
-    fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
-      const wasm = await loadWasm();
-      if (!wasm) {
-        return fetch(input, init);
-      }
-      const url = typeof input === "string" ? input : input.toString();
-      if (url.endsWith("/sign") && init?.method === "POST") {
-        const { hash } = JSON.parse(init.body as string) as { hash: Hex };
-        const sig = wasm.sign(kp.secretRef, hash);
-        const pubkey = bytesToHex(kp.publicKey);
-        return new Response(
-          JSON.stringify({
-            sig,
-            pubkey,
-            commitment: keccak256(pubkey),
-          }),
-          { status: 200, headers: { "content-type": "application/json" } },
-        );
-      }
-      return fetch(input, init);
-    }) as typeof fetch,
+    source: "browser-wasm",
+    async getPublicKey(): Promise<Uint8Array> {
+      return kp.publicKey;
+    },
+    async sign(opHash: Hex): Promise<Hex> {
+      return signFalcon512Browser(opHash, kp.secretKeyHex);
+    },
   };
 }

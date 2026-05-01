@@ -1,51 +1,32 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { type Address, formatEther, keccak256, bytesToHex, zeroHash } from "viem";
-import { useReadContract } from "wagmi";
-import { abi } from "@nexora/wallet-sdk";
-import type { FalconMockKeypair } from "@nexora/wallet-sdk/signers";
-import type { Deployments } from "@/lib/deployments";
+import { type Address, formatEther } from "viem";
+import { NEXORA_CHAIN } from "@nexora/wallet-sdk";
 
 interface Props {
   owner: Address;
   balance: { value: bigint; symbol: string } | undefined;
-  falconKp: FalconMockKeypair | null;
-  deployments: Deployments;
   onDisconnect: () => void;
 }
 
-export function AccountCard({ owner, balance, falconKp, deployments, onDisconnect }: Props) {
-  const [predicted, setPredicted] = useState<Address | null>(null);
-  const pqHash = falconKp ? keccak256(bytesToHex(falconKp.publicKey)) : zeroHash;
-
-  const predict = useReadContract({
-    address: deployments.accountFactory,
-    abi: abi.accountFactoryAbi,
-    functionName: "predictAddress",
-    args: [owner, pqHash, zeroHash],
-    query: {
-      enabled:
-        Boolean(falconKp) &&
-        deployments.accountFactory !==
-          "0x0000000000000000000000000000000000000000",
-    },
-  });
-
-  useEffect(() => {
-    if (predict.data) setPredicted(predict.data as Address);
-  }, [predict.data]);
-
+/**
+ * Compact summary of the connected wallet. Heavy onboarding state lives in
+ * the dedicated Keygen / Deploy / Fund cards.
+ */
+export function AccountCard({ owner, balance, onDisconnect }: Props) {
   return (
     <div className="rounded-xl border border-nexora-border bg-nexora-card p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="text-xs uppercase tracking-wider text-zinc-500">
-            Connected
+            Connected (EOA)
           </div>
-          <div className="mt-1 font-mono text-sm">{owner}</div>
+          <div className="mt-1 break-all font-mono text-sm">{owner}</div>
           <div className="mt-1 text-sm text-zinc-400">
-            {balance ? `${formatEther(balance.value)} ${balance.symbol}` : "…"}
+            {balance
+              ? `${formatEther(balance.value)} ${balance.symbol}`
+              : "…"}{" "}
+            · chain {NEXORA_CHAIN.id}
           </div>
         </div>
         <button
@@ -55,51 +36,6 @@ export function AccountCard({ owner, balance, falconKp, deployments, onDisconnec
           disconnect
         </button>
       </div>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-2">
-        <Card title="ECDSA owner (k1)">
-          <div className="font-mono text-xs text-zinc-300">{owner}</div>
-        </Card>
-        <Card title="PQ pubkey hash (scheme 1)">
-          <div className="font-mono text-xs text-zinc-300 break-all">
-            {pqHash}
-          </div>
-        </Card>
-        <Card title="Smart account">
-          <div className="font-mono text-xs text-zinc-300">
-            {deployments.account ? (
-              <>
-                <div className="text-emerald-400/90">deployed (demo)</div>
-                <div className="mt-1 break-all">{deployments.account}</div>
-                {predicted && predicted !== deployments.account && (
-                  <div className="mt-2 text-[10px] text-amber-400/90">
-                    Predicted from your Falcon key differs — send uses demo account above. Clear
-                    localStorage / match deploy seed to align.
-                  </div>
-                )}
-              </>
-            ) : (
-              predicted ?? "not yet deployed (set account in deployments or deploy via factory)"
-            )}
-          </div>
-        </Card>
-        <Card title="Verifier registry">
-          <div className="font-mono text-xs text-zinc-300">
-            {deployments.verifierRegistry}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-md border border-nexora-border bg-zinc-900/30 p-4">
-      <div className="text-[10px] uppercase tracking-wider text-zinc-500">
-        {title}
-      </div>
-      <div className="mt-2">{children}</div>
     </div>
   );
 }

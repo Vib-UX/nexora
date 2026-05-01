@@ -1,0 +1,17 @@
+{
+  "name": "nexora-falcon-signer-wasm",
+  "type": "module",
+  "description": "wasm-bindgen Falcon-512 signer for the Nexora dashboard (browser path).",
+  "version": "0.1.0",
+  "license": "MIT",
+  "files": [
+    "nexora_falcon512_bg.wasm",
+    "nexora_falcon512.js",
+    "nexora_falcon512.d.ts"
+  ],
+  "main": "nexora_falcon512.js",
+  "types": "nexora_falcon512.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
