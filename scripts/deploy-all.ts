@@ -199,15 +199,31 @@ async function main() {
     encode(["address"], [deployer.address]),
   );
 
-  // 5. PolicyEngine.setThresholds(1 ether, 100 ether) — explicit so the
-  //    demo's intents land in the expected bands.
+  // 5. PolicyEngine.setThresholds — explicit so the demo's intents land
+  //    in the expected bands. The thresholds must be lower than the
+  //    SendForm HIGH / CRITICAL presets (0.05 / 0.5 ETH) so a user with
+  //    a small dev-funded smart account can exercise every band:
+  //
+  //      LOW       <= 0.01 ETH      (preset 0.001)
+  //      HIGH      >  0.01 ETH      (preset 0.05)
+  //      CRITICAL  >  0.10 ETH      (preset 0.5)
+  //
+  //    Override via `NEXORA_POLICY_HIGH_ETH` / `NEXORA_POLICY_CRITICAL_ETH`.
+  const highEth = process.env.NEXORA_POLICY_HIGH_ETH ?? "0.01";
+  const criticalEth = process.env.NEXORA_POLICY_CRITICAL_ETH ?? "0.1";
   await call(
     dep.policyEngine,
     "setThresholds(uint256,uint256)",
     encode(
       ["uint256", "uint256"],
-      [parseEther("1"), parseEther("100")],
+      [
+        parseEther(highEth as `${number}`),
+        parseEther(criticalEth as `${number}`),
+      ],
     ),
+  );
+  console.log(
+    `  policy thresholds: HIGH > ${highEth} ETH · CRITICAL > ${criticalEth} ETH`,
   );
 
   // 6. AccountFactory.init(owner, impl, registry, policy)
@@ -258,13 +274,15 @@ async function main() {
     // payable `fund()` method since stylus 0.6 doesn't support
     // `receive()`.
     const fundSelector = (keccak256(toHex("fund()")) as Hex).slice(0, 10) as Hex;
+    const fundEth =
+      process.env.NEXORA_AGENT_FUND_ETH ?? "10"; // devnet prefund is finite; avoid 500 ETH after many deploys
     const fundTx = await walletClient.sendTransaction({
       to: predicted,
-      value: parseEther("500"),
+      value: parseEther(fundEth as `${number}`),
       data: fundSelector,
     });
     await publicClient.waitForTransactionReceipt({ hash: fundTx });
-    console.log(`  funded with 500 ETH (${fundTx})`);
+    console.log(`  funded with ${fundEth} ETH (${fundTx})`);
 
     dep.account = predicted;
     dep.pqPubkeyHash = pqPubkeyHash;
