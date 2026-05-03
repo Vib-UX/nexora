@@ -17,8 +17,6 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./*"],
-      "@nexora/wallet-sdk": ["../wallet-sdk/dist/index.d.ts"],
-      "@nexora/wallet-sdk/signers": ["../wallet-sdk/dist/signers/index.d.ts"],
       "viem": ["./node_modules/viem"],
       "viem/*": ["./node_modules/viem/*"]
     },

@@ -1,0 +1,29 @@
+{
+  "name": "@nexora/wallet-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Vendored copy of wallet-sdk/dist for Vercel (dashboard-only root). Regenerate from repo root: pnpm --filter @nexora/wallet-sdk build && rsync -a --delete wallet-sdk/dist/ dashboard/vendor/wallet-sdk/ (keep this package.json).",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js",
+      "default": "./index.js"
+    },
+    "./signers": {
+      "types": "./signers/index.d.ts",
+      "import": "./signers/index.js",
+      "default": "./signers/index.js"
+    },
+    "./abi": {
+      "types": "./abi/index.d.ts",
+      "import": "./abi/index.js",
+      "default": "./abi/index.js"
+    }
+  },
+  "dependencies": {
+    "viem": "^2.21.40"
+  }
+}
