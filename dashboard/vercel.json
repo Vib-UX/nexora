@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd .. && pnpm install --no-frozen-lockfile --force && pnpm --filter @nexora/wallet-sdk build",
+  "installCommand": "cd .. && NODE_ENV=development pnpm install --no-frozen-lockfile --force && pnpm --filter @nexora/wallet-sdk build",
   "buildCommand": "next build",
   "framework": "nextjs"
 }
