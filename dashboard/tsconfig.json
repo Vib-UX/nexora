@@ -17,9 +17,9 @@
       }
     ],
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@nexora/wallet-sdk": ["../wallet-sdk/dist/index.d.ts"],
+      "@nexora/wallet-sdk/signers": ["../wallet-sdk/dist/signers/index.d.ts"]
     },
     "allowJs": true
   },
