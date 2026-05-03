@@ -1,0 +1,6 @@
+{
+  "buildCommand": "pnpm --filter @nexora/wallet-sdk build && pnpm --filter @nexora/dashboard build",
+  "outputDirectory": "dashboard/.next",
+  "framework": "nextjs",
+  "installCommand": "pnpm install"
+}
