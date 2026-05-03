@@ -279,7 +279,7 @@ export function SendForm({
         patchStep("ecdsa", { status: "running" });
         const t3 = performance.now();
         ecdsaSig = await signers.signEcdsaOpHash(
-          walletClient.account,
+          { walletClient, account: walletClient.account },
           computedOpHash,
         );
         patchStep("ecdsa", {
