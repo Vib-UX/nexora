@@ -1,0 +1,10 @@
+{
+  "chainId": 412346,
+  "pqVerifier": "0xda52b25ddb0e3b9cc393b0690ac62245ac772527",
+  "pqVerifierFalcon512": "0x1294b86822ff4976bfe136cb06cf43ec7fcf2574",
+  "verifierRegistry": "0xe1080224b632a93951a7cfa33eeea9fd81558b5e",
+  "policyEngine": "0x525c2aba45f66987217323e8a05ea400c65d06dc",
+  "accountImplementation": "0x4a2ba922052ba54e29c5417bc979daaf7d5fe4f4",
+  "accountFactory": "0x3df948c956e14175f43670407d5796b95bb219d8",
+  "bridgeMock": "0x3f1Eae7D46d88F08fc2F8ed27FCb2AB183EB2d0E"
+}

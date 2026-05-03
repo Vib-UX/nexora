@@ -5,9 +5,9 @@ import {
   type Deployments,
   normalizeDeployments,
 } from "./deployments";
-import bundledDeploymentsJson from "../public/deployments.json";
+import bundledDeploymentsJson from "./deployments.bundled.json";
 
-/** Addresses baked in at build time from `public/deployments.json` (always works on Vercel). */
+/** Addresses baked in at build time from `lib/deployments.bundled.json` (webpack cannot import from `public/`). */
 const BUNDLED = normalizeDeployments(bundledDeploymentsJson as unknown);
 
 function fromEnv(): Deployments | null {
@@ -24,7 +24,7 @@ function fromEnv(): Deployments | null {
  * Loads contract addresses for the dashboard:
  * 1. `NEXT_PUBLIC_DEPLOYMENTS` (build-time JSON string) if set — wins over everything
  * 2. Otherwise GET `/deployments.json` (optional refresh / CDN)
- * 3. Otherwise bundled import of `public/deployments.json` from this build (reliable on Vercel)
+ * 3. Otherwise bundled import of `lib/deployments.bundled.json` (kept in sync by deploy-all.ts)
  */
 export function useDeployments(): {
   deployments: Deployments;

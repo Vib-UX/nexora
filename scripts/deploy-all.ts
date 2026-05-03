@@ -300,6 +300,7 @@ async function main() {
   console.log(`\n[deploy] wrote ${resolve(outDir, "deployments.json")}`);
 
   const dashboardPublic = resolve(ROOT, "dashboard/public/deployments.json");
+  const dashboardBundled = resolve(ROOT, "dashboard/lib/deployments.bundled.json");
   try {
     const {
       pqVerifier,
@@ -315,26 +316,25 @@ async function main() {
     // `AccountFactory.predict_address`. Pre-baking an address here would
     // re-introduce the "demo account" that the user can never re-deploy
     // from their browser keypair.
-    writeFileSync(
-      dashboardPublic,
-      JSON.stringify(
-        {
-          chainId: dep.chainId,
-          pqVerifier,
-          pqVerifierFalcon512,
-          verifierRegistry,
-          policyEngine,
-          accountImplementation,
-          accountFactory,
-          bridgeMock,
-        },
-        null,
-        2,
-      ),
+    const dashboardPayload = JSON.stringify(
+      {
+        chainId: dep.chainId,
+        pqVerifier,
+        pqVerifierFalcon512,
+        verifierRegistry,
+        policyEngine,
+        accountImplementation,
+        accountFactory,
+        bridgeMock,
+      },
+      null,
+      2,
     );
-    console.log(`[deploy] synced dashboard/public/deployments.json`);
+    writeFileSync(dashboardPublic, dashboardPayload);
+    writeFileSync(dashboardBundled, dashboardPayload);
+    console.log(`[deploy] synced dashboard/public/deployments.json + lib/deployments.bundled.json`);
   } catch (e) {
-    console.warn("[deploy] could not write dashboard/public/deployments.json", e);
+    console.warn("[deploy] could not write dashboard deployment JSON files", e);
   }
 }
 
