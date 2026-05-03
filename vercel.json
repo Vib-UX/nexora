@@ -1,6 +1,0 @@
-{
-  "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @nexora/wallet-sdk build && pnpm --filter @nexora/dashboard build",
-  "outputDirectory": "dashboard/.next",
-  "framework": "nextjs"
-}
