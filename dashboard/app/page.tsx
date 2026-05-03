@@ -13,11 +13,13 @@ import {
 } from "wagmi";
 import { ConnectCard } from "@/components/ConnectCard";
 import { AccountCard } from "@/components/AccountCard";
+import { DeploymentBanner } from "@/components/DeploymentBanner";
 import { KeygenCard } from "@/components/KeygenCard";
 import { DeployAccountCard } from "@/components/DeployAccountCard";
 import { FundAccountCard } from "@/components/FundAccountCard";
 import { SendForm } from "@/components/SendForm";
 import { OpHistory } from "@/components/OpHistory";
+import { SectionErrorBoundary } from "@/components/SectionErrorBoundary";
 import {
   type PendingTraceTx,
   VerifierTracePanel,
@@ -33,7 +35,7 @@ export default function Home() {
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
   const balance = useBalance({ address });
-  const { deployments } = useDeployments();
+  const { deployments, ready: deploymentsReady } = useDeployments();
   const publicClient = usePublicClient();
 
   const [keypair, setKeypair] = useState<DashboardKeypairView | null>(null);
@@ -124,6 +126,8 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
+      <DeploymentBanner ready={deploymentsReady} deployments={deployments} />
+
       <AccountCard
         owner={address!}
         balance={balance.data}
@@ -131,36 +135,48 @@ export default function Home() {
       />
 
       <div ref={keygenRef}>
-        <KeygenCard onChange={handleKeypairChange} />
+        <SectionErrorBoundary title="Falcon-512 keypair">
+          <KeygenCard onChange={handleKeypairChange} />
+        </SectionErrorBoundary>
       </div>
 
       <div ref={deployRef}>
-        <DeployAccountCard
-          owner={address!}
-          keypair={keypair}
-          deployments={deployments}
-          onDeployed={handleDeployed}
-        />
+        <SectionErrorBoundary title="Smart account deployment">
+          <DeployAccountCard
+            owner={address!}
+            keypair={keypair}
+            deployments={deployments}
+            onDeployed={handleDeployed}
+          />
+        </SectionErrorBoundary>
       </div>
 
       <div ref={fundRef}>
-        <FundAccountCard account={accountAddress} />
+        <SectionErrorBoundary title="Fund account">
+          <FundAccountCard account={accountAddress} />
+        </SectionErrorBoundary>
       </div>
 
-      <SendForm
-        owner={address!}
-        keypair={keypair}
-        account={accountAddress}
-        accountDeployed={Boolean(accountAddress)}
-        accountBalance={accountBalance}
-        deployments={deployments}
-        onJumpToStep={handleJump}
-        onTx={setPendingTrace}
-      />
+      <SectionErrorBoundary title="Send transaction">
+        <SendForm
+          owner={address!}
+          keypair={keypair}
+          account={accountAddress}
+          accountDeployed={Boolean(accountAddress)}
+          accountBalance={accountBalance}
+          deployments={deployments}
+          onJumpToStep={handleJump}
+          onTx={setPendingTrace}
+        />
+      </SectionErrorBoundary>
 
-      <VerifierTracePanel pending={pendingTrace} deployments={deployments} />
+      <SectionErrorBoundary title="Verifier trace">
+        <VerifierTracePanel pending={pendingTrace} deployments={deployments} />
+      </SectionErrorBoundary>
 
-      <OpHistory deployments={deployments} />
+      <SectionErrorBoundary title="Operation history">
+        <OpHistory deployments={deployments} />
+      </SectionErrorBoundary>
     </div>
   );
 }

@@ -2,9 +2,8 @@
   "name": "@nexora/dashboard",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.15.1",
   "engines": {
-    "node": "20.x"
+    "node": ">=20"
   },
   "scripts": {
     "dev": "next dev -p 3000",
