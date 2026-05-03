@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd .. && pnpm install --frozen-lockfile",
-  "buildCommand": "cd .. && pnpm --filter @nexora/wallet-sdk build && pnpm --filter @nexora/dashboard build",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @nexora/wallet-sdk build && next build",
   "framework": "nextjs"
 }
