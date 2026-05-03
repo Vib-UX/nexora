@@ -1,0 +1,116 @@
+export const nexoraAccountAbi = [
+    {
+        type: "function",
+        name: "init",
+        stateMutability: "nonpayable",
+        inputs: [
+            { name: "owner", type: "address" },
+            { name: "pqPubkeyHash", type: "bytes32" },
+            { name: "verifierRegistry", type: "address" },
+            { name: "policyEngine", type: "address" },
+        ],
+        outputs: [],
+    },
+    { type: "function", name: "fund", stateMutability: "payable", inputs: [], outputs: [] },
+    { type: "function", name: "owner", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+    { type: "function", name: "pqPubkeyHash", stateMutability: "view", inputs: [], outputs: [{ type: "bytes32" }] },
+    { type: "function", name: "verifierRegistry", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+    { type: "function", name: "policyEngine", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+    {
+        type: "function",
+        name: "getNonce",
+        stateMutability: "view",
+        inputs: [{ name: "channel", type: "uint256" }],
+        outputs: [{ type: "uint256" }],
+    },
+    {
+        type: "function",
+        name: "executeUserOp",
+        stateMutability: "payable",
+        inputs: [
+            { name: "opBytes", type: "bytes" },
+            { name: "providedPubkey", type: "bytes" },
+        ],
+        outputs: [{ type: "bool" }],
+    },
+    {
+        type: "function",
+        name: "executeIntent",
+        stateMutability: "payable",
+        inputs: [
+            { name: "agentId", type: "bytes32" },
+            { name: "opBytes", type: "bytes" },
+            { name: "providedPubkey", type: "bytes" },
+        ],
+        outputs: [{ type: "bool" }],
+    },
+    {
+        type: "function",
+        name: "validateUserOp",
+        stateMutability: "view",
+        inputs: [
+            { name: "opBytes", type: "bytes" },
+            { name: "providedPubkey", type: "bytes" },
+        ],
+        outputs: [{ type: "uint256" }],
+    },
+    {
+        type: "function",
+        name: "isValidSignature",
+        stateMutability: "view",
+        inputs: [
+            { name: "hash", type: "bytes32" },
+            { name: "sig", type: "bytes" },
+        ],
+        outputs: [{ type: "bytes4" }],
+    },
+    {
+        type: "function",
+        name: "proposeOwnerRotation",
+        stateMutability: "nonpayable",
+        inputs: [
+            { name: "newOwner", type: "address" },
+            { name: "scheme", type: "uint16" },
+            { name: "pqSig", type: "bytes" },
+            { name: "pqPubkey", type: "bytes" },
+        ],
+        outputs: [],
+    },
+    { type: "function", name: "commitOwnerRotation", stateMutability: "nonpayable", inputs: [], outputs: [] },
+    { type: "function", name: "cancelOwnerRotation", stateMutability: "nonpayable", inputs: [], outputs: [] },
+    {
+        type: "function",
+        name: "proposePqPubkeyRotation",
+        stateMutability: "nonpayable",
+        inputs: [
+            { name: "newPubkeyHash", type: "bytes32" },
+            { name: "scheme", type: "uint16" },
+            { name: "pqSigOld", type: "bytes" },
+            { name: "pqPubkeyOld", type: "bytes" },
+        ],
+        outputs: [],
+    },
+    { type: "function", name: "commitPqPubkeyRotation", stateMutability: "nonpayable", inputs: [], outputs: [] },
+    {
+        type: "event",
+        name: "UserOpExecuted",
+        inputs: [
+            { name: "sender", type: "address", indexed: true },
+            { name: "opHash", type: "bytes32", indexed: true },
+            { name: "policyTag", type: "uint8", indexed: false },
+            { name: "verifierScheme", type: "uint16", indexed: false },
+            { name: "success", type: "bool", indexed: false },
+        ],
+    },
+    {
+        type: "event",
+        name: "IntentExecuted",
+        inputs: [
+            { name: "agentId", type: "bytes32", indexed: true },
+            { name: "policyTag", type: "uint8", indexed: false },
+            { name: "opHash", type: "bytes32", indexed: false },
+            { name: "validator", type: "address", indexed: false },
+        ],
+    },
+];
+//# sourceMappingURL=nexoraAccount.js.map

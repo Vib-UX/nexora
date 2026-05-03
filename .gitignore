@@ -6,6 +6,9 @@ node_modules/
 out/
 dist/
 build/
+# Vercel needs wallet-sdk/dist/ at install time (no tsc available there).
+!wallet-sdk/dist/
+!wallet-sdk/dist/**
 *.log
 .env
 .env.local
