@@ -3,9 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   type Deployments,
-  emptyDeployments,
   normalizeDeployments,
 } from "./deployments";
+import bundledDeploymentsJson from "../public/deployments.json";
+
+/** Addresses baked in at build time from `public/deployments.json` (always works on Vercel). */
+const BUNDLED = normalizeDeployments(bundledDeploymentsJson as unknown);
 
 function fromEnv(): Deployments | null {
   const raw = process.env.NEXT_PUBLIC_DEPLOYMENTS;
@@ -19,8 +22,9 @@ function fromEnv(): Deployments | null {
 
 /**
  * Loads contract addresses for the dashboard:
- * 1. `NEXT_PUBLIC_DEPLOYMENTS` (build-time JSON string) if set
- * 2. Otherwise fetches `/deployments.json` (served from `public/`, updated by `deploy-all.ts`)
+ * 1. `NEXT_PUBLIC_DEPLOYMENTS` (build-time JSON string) if set — wins over everything
+ * 2. Otherwise GET `/deployments.json` (optional refresh / CDN)
+ * 3. Otherwise bundled import of `public/deployments.json` from this build (reliable on Vercel)
  */
 export function useDeployments(): {
   deployments: Deployments;
@@ -34,7 +38,16 @@ export function useDeployments(): {
     if (envDeployments) return;
     let cancelled = false;
     fetch("/deployments.json", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const ct = r.headers.get("content-type") ?? "";
+        if (!ct.includes("application/json")) return null;
+        try {
+          return (await r.json()) as unknown;
+        } catch {
+          return null;
+        }
+      })
       .then((j: unknown) => {
         if (cancelled || !j) return;
         setFetched(normalizeDeployments(j));
@@ -48,7 +61,7 @@ export function useDeployments(): {
     };
   }, [envDeployments]);
 
-  const deployments = envDeployments ?? fetched ?? emptyDeployments();
+  const deployments = envDeployments ?? fetched ?? BUNDLED;
   const ready = Boolean(envDeployments) || fetchDone;
 
   return { deployments, ready };
