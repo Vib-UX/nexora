@@ -7,8 +7,6 @@ import {
   clearKeypair,
   formatBytes,
   generateBrowserKeypairAndStore,
-  getFalcon512SignerUrl,
-  probeDaemon,
   readKeypair,
 } from "@/lib/falcon512Storage";
 import { isWasmAvailable } from "@/lib/falcon512Browser";
@@ -35,8 +33,6 @@ export function KeygenCard({ onChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wasmReady, setWasmReady] = useState<boolean | null>(null);
-  const [daemonReady, setDaemonReady] = useState<boolean | null>(null);
-  const [daemonPubkey, setDaemonPubkey] = useState<string | null>(null);
 
   // Hydrate from localStorage on mount.
   useEffect(() => {
@@ -50,11 +46,6 @@ export function KeygenCard({ onChange }: Props) {
     let cancelled = false;
     isWasmAvailable().then((ok) => {
       if (!cancelled) setWasmReady(ok);
-    });
-    probeDaemon().then((r) => {
-      if (cancelled) return;
-      setDaemonReady(r.ok);
-      if (r.ok && r.pubkey) setDaemonPubkey(r.pubkey);
     });
     return () => {
       cancelled = true;
@@ -95,9 +86,7 @@ export function KeygenCard({ onChange }: Props) {
     ? view.source
     : wasmReady
       ? "browser-wasm"
-      : daemonReady
-        ? "daemon"
-        : "none";
+      : "none";
 
   return (
     <div className="rounded-xl border border-nexora-border bg-nexora-card p-6">
@@ -169,11 +158,7 @@ export function KeygenCard({ onChange }: Props) {
           </button>
         )}
         <span className="ml-auto text-[11px] text-zinc-500 font-mono">
-          wasm: {wasmReady === null ? "…" : wasmReady ? "ok" : "unavailable"} ·
-          daemon: {daemonReady === null ? "…" : daemonReady ? "ok" : "down"}
-          {daemonPubkey && daemonReady ? (
-            <span> ({daemonPubkey.slice(0, 10)}…)</span>
-          ) : null}
+          wasm: {wasmReady === null ? "…" : wasmReady ? "ok" : "unavailable"}
         </span>
       </div>
 
@@ -189,12 +174,6 @@ export function KeygenCard({ onChange }: Props) {
         passkey / WebAuthn flow or keep the secret on a hardware signer.
       </div>
 
-      <div className="mt-2 text-[11px] text-zinc-500">
-        Daemon URL:{" "}
-        <span className="font-mono text-zinc-400">
-          {getFalcon512SignerUrl()}
-        </span>
-      </div>
     </div>
   );
 }

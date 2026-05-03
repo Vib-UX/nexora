@@ -24,7 +24,7 @@ import {
 } from "@/components/VerifierTracePanel";
 import { useDeployments } from "@/lib/useDeployments";
 import { type DashboardKeypairView } from "@/lib/falcon512Storage";
-import { NEXORA_CHAIN } from "@nexora/wallet-sdk";
+import { NEXORA_CHAIN } from "@/lib/nexoraChain";
 
 export default function Home() {
   const { address, isConnected } = useAccount();

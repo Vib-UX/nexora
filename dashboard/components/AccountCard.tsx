@@ -1,7 +1,7 @@
 "use client";
 
 import { type Address, formatEther } from "viem";
-import { NEXORA_CHAIN } from "@nexora/wallet-sdk";
+import { NEXORA_CHAIN } from "@/lib/nexoraChain";
 
 interface Props {
   owner: Address;

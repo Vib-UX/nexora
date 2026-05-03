@@ -4,31 +4,45 @@ import { defineChain, type Chain } from "viem";
 // Production Orbit deployment will override this to a registered chainId.
 export const NEXORA_CHAIN_ID = 412346;
 
-function resolveRpcUrl(): string {
-  return (
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+/**
+ * HTTP RPC for Nexora.
+ * `NEXT_PUBLIC_*` is inlined by Next.js in the browser; `NEXORA_RPC_URL` is for Node/scripts.
+ */
+export function getNexoraHttpRpcUrl(): string {
+  const raw =
     process.env.NEXT_PUBLIC_NEXORA_RPC_URL ??
     process.env.NEXORA_RPC_URL ??
-    "http://localhost:8547"
-  );
+    "http://localhost:8547";
+  return stripTrailingSlash(raw);
 }
 
-function resolveWsUrl(): string {
-  return (
+/**
+ * WebSocket RPC for Nexora (subscriptions).
+ */
+export function getNexoraWsRpcUrl(): string {
+  const raw =
     process.env.NEXT_PUBLIC_NEXORA_WS_URL ??
     process.env.NEXORA_WS_URL ??
-    "ws://localhost:8548"
-  );
+    "ws://localhost:8548";
+  return stripTrailingSlash(raw);
 }
 
-function resolveExplorerUrl(): string {
-  return process.env.NEXT_PUBLIC_EXPLORER_URL ?? "http://localhost:4000";
+function getNexoraBlockExplorerUrl(): string {
+  const raw =
+    process.env.NEXT_PUBLIC_EXPLORER_URL ??
+    process.env.NEXORA_EXPLORER_URL ??
+    "http://localhost:4000";
+  return stripTrailingSlash(raw);
 }
 
 /**
  * Canonical viem chain definition for Nexora Devnet.
- * RPC URL is overridable via `NEXORA_RPC_URL` or, for browser bundles
- * (Next.js dashboard), `NEXT_PUBLIC_NEXORA_RPC_URL`. Same pattern for WS /
- * explorer URLs.
+ * Override RPC via `NEXT_PUBLIC_NEXORA_RPC_URL` / `NEXORA_RPC_URL` (and WS analogs),
+ * or pass your own `Transport` to `createWalletClient`.
  */
 export const NEXORA_CHAIN: Chain = defineChain({
   id: NEXORA_CHAIN_ID,
@@ -36,12 +50,12 @@ export const NEXORA_CHAIN: Chain = defineChain({
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
     default: {
-      http: [resolveRpcUrl()],
-      webSocket: [resolveWsUrl()],
+      http: [getNexoraHttpRpcUrl()],
+      webSocket: [getNexoraWsRpcUrl()],
     },
   },
   blockExplorers: {
-    default: { name: "Blockscout", url: resolveExplorerUrl() },
+    default: { name: "Blockscout", url: getNexoraBlockExplorerUrl() },
   },
   testnet: true,
 });
@@ -50,6 +64,6 @@ export const ADD_CHAIN_PARAMS = {
   chainId: "0x64ABA",
   chainName: "Nexora Devnet",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-  rpcUrls: [resolveRpcUrl()],
-  blockExplorerUrls: [resolveExplorerUrl()],
+  rpcUrls: [getNexoraHttpRpcUrl()],
+  blockExplorerUrls: [getNexoraBlockExplorerUrl()],
 } as const;

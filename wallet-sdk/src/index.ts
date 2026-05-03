@@ -11,4 +11,10 @@ export * from "./policy.js";
 export * from "./client.js";
 export * as abi from "./abi/index.js";
 export * as signers from "./signers/index.js";
-export { NEXORA_CHAIN, NEXORA_CHAIN_ID, ADD_CHAIN_PARAMS } from "./chain.js";
+export {
+  NEXORA_CHAIN,
+  NEXORA_CHAIN_ID,
+  ADD_CHAIN_PARAMS,
+  getNexoraHttpRpcUrl,
+  getNexoraWsRpcUrl,
+} from "./chain.js";

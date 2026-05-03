@@ -2,7 +2,7 @@
 
 import type { Connector } from "wagmi";
 import type { Deployments } from "@/lib/deployments";
-import { ADD_CHAIN_PARAMS } from "@nexora/wallet-sdk";
+import { walletAddEthereumChainParams } from "@/lib/nexoraEndpoints";
 
 interface Props {
   connectors: readonly Connector[];
@@ -39,7 +39,7 @@ export function ConnectCard({ connectors, connect, deployments }: Props) {
             if (!eth) return alert("No injected wallet found.");
             await eth.request({
               method: "wallet_addEthereumChain",
-              params: [ADD_CHAIN_PARAMS],
+              params: [walletAddEthereumChainParams()],
             });
           }}
         >
