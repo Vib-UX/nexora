@@ -42,7 +42,13 @@ docker compose up -d nitro
 docker compose --profile explorer up -d
 ```
 
-RPC: `http://localhost:8547` · WS: `ws://localhost:8548` · Explorer: `http://localhost:4000`
+Chain state lives in the Docker volume **`nexora-nitro-data`** (not bind-mounted `./data`), so running Compose with `sudo` does not leave root-owned files that block Nitro (`jwtsecret` permission denied). To reset the devnet state: `docker compose down` then `docker volume rm chain_nexora-nitro-data` (prefix may match your compose project name).
+
+If you **bind-mount** `./data` manually, ensure the container user can write it: `sudo chown -R 1000:1000 chain/data`.
+
+RPC: `http://127.0.0.1:8547` · WS: `ws://127.0.0.1:8548` · Explorer: `http://localhost:4000`
+
+Ports map to **loopback only** so the node is not exposed on the LAN; use [deploy/vps/](../deploy/vps/README.md) (nginx + TLS) for a public hostname.
 
 ## Wallet quick-add (`wallet_addEthereumChain`)
 

@@ -18,7 +18,7 @@ You will need:
 
 - MetaMask (or any injected EVM wallet)
 - A funded EOA on the Nexora devnet (use the dev faucet or one of the
-  pre-funded genesis accounts in `chain/data/`)
+  pre-funded dev accounts documented in `chain/docker-compose.yml`)
 
 Tx exploration is handled inside the dashboard at
 `http://localhost:3000/tx/<hash>`; every "tx 0x…" / "trace ↗" link in

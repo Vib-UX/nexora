@@ -13,16 +13,22 @@
 # namespaces, which Nitro does not expose. The dashboard uses the
 # Geth-compatible `debug_traceTransaction` (Geth `callTracer`) Nitro
 # does implement and decodes the Falcon-512 verifier call inline.
+#
+# Ports bind to loopback only so JSON-RPC / WS are not exposed publicly;
+# use nginx on 443 (see deploy/vps/) for TLS termination.
+#
+# Data uses a named Docker volume so `sudo docker-compose` does not leave
+# ./data owned by root (which breaks Nitro: jwtsecret permission denied).
 services:
   nitro:
     image: offchainlabs/nitro-node:v3.2.1-d81324d
     container_name: nexora-nitro
     restart: unless-stopped
     ports:
-      - "8547:8547"
-      - "8548:8548"
+      - "127.0.0.1:8547:8547"
+      - "127.0.0.1:8548:8548"
     volumes:
-      - ./data:/home/user/.arbitrum
+      - nexora-nitro-data:/home/user/.arbitrum
     command:
       - --dev
       - --http.addr=0.0.0.0
@@ -34,3 +40,6 @@ services:
       - --ws.port=8548
       - --ws.api=net,web3,eth,arb,arbdebug
       - --ws.origins=*
+
+volumes:
+  nexora-nitro-data:
