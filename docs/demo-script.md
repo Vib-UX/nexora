@@ -9,7 +9,7 @@ running a CLI.
 
 ```bash
 pnpm install
-./scripts/dev-up.sh                              # boots local Nitro + RPC at :8547
+./scripts/dev-up.sh                              # boots Nitro RPC :8547
 DEPLOYER_PRIVATE_KEY=0x... pnpm tsx scripts/deploy-all.ts
 pnpm --filter @nexora/dashboard dev              # http://localhost:3000
 ```
@@ -19,6 +19,10 @@ You will need:
 - MetaMask (or any injected EVM wallet)
 - A funded EOA on the Nexora devnet (use the dev faucet or one of the
   pre-funded genesis accounts in `chain/data/`)
+
+Tx exploration is handled inside the dashboard at
+`http://localhost:3000/tx/<hash>`; every "tx 0x…" / "trace ↗" link in
+the UI opens that page in a new tab.
 
 The Falcon-512 wasm bundle is committed under
 `dashboard/public/wasm/falcon512/`, so the dashboard can keygen and sign
@@ -105,6 +109,33 @@ The `666 B real Falcon sig + 65 B ECDSA submitted` annotation makes the
 real PQ payload visible. On-chain, `pq-verifier-falcon512` runs the
 NTT, hash-to-point, and norm check before the op is allowed to execute.
 
+As soon as the tx confirms, the **Verifier trace** card lights up:
+
+```
+verify · ok                                    (badge)
+pqVerifierFalcon512.verify(bytes32, bytes, bytes)
+  type     STATICCALL
+  msg hash 0xab12…ef
+  sig      666 B (real Falcon-512)
+  pubkey   897 B (real Falcon-512)
+  gas used 4_312_…
+  → 0x…01 (verify -> true)
+
+Call tree:
+  CALL          0x3f1Eae…2d0E 0x…
+↳ CALL          NexoraAccount 0xb52d9a4d
+↳ STATICCALL    VerifierRegistry 0x4b9b8...
+↳ STATICCALL    pqVerifierFalcon512 0xa72d44d8     ← highlighted
+↳ CALL          BridgeMock 0xdeadbeef
+```
+
+The trace is fetched live from the Nitro node via
+`debug_traceTransaction` (Geth `callTracer`); the dashboard finds the
+call into `deployments.pqVerifierFalcon512` and decodes its inputs.
+Click the "open trace ↗" link to land on a full-page explorer at
+`http://localhost:3000/tx/<hash>` — same trace, plus the receipt
+status, from/to/value, gas, and a labelled call tree.
+
 **Show the calldata**: open dev tools, watch the `signatures` field on
 the tx. It is `abi.encode(EcdsaSig, PqSig)` with both populated; the PQ
 field is the canonical `0x39` Falcon-512 signature header (or `0x59`
@@ -131,8 +162,10 @@ NexoraAccount.commitOwnerRotation()
 Open DevTools → Application → Local Storage → `nexora.falcon512.sk.v1`
 and flip a single byte in the `secretKey` value. Click **Sign & send**
 again. Step 4 produces a signature, step 5 submits, step 6 reverts with
-`INVALID_PQ` in the trace. Click **Re-generate** in the Keygen card to
-restore a working key.
+`INVALID_PQ` in the trace. The **Verifier trace** card flips its badge
+to `verify · failed` and the boolean output of the verifier call shows
+`0x…00`. Click **Re-generate** in the Keygen card to restore a working
+key.
 
 ## 9. Swap the verifier — "we never have to redeploy wallets"
 
@@ -170,8 +203,10 @@ dashboard's op history streams them in real time via `IntentExecuted`.
   cargo run --release -- keygen --out keys.json
   cargo run --release -- serve --keys keys.json --addr 127.0.0.1:9090
   ```
-- **Local chain misbehaves**: `WITH_EXPLORER=1 ./scripts/dev-up.sh`
-  for Blockscout debugging.
+- **Want to use a hosted explorer instead** of the in-dashboard tx
+  page, set `NEXT_PUBLIC_EXPLORER_URL=https://your-explorer/` before
+  starting the dashboard. Every "open trace ↗" link in the UI will
+  point at `${base}/tx/<hash>` instead.
 - **MetaMask out of reach**: `pnpm --filter @nexora/relayer dev` and
   switch the SDK to `relayerUrl` mode for sponsor-relayed submission.
 

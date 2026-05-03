@@ -14,6 +14,7 @@ import {
 import { abi } from "@nexora/wallet-sdk";
 import type { Deployments } from "@/lib/deployments";
 import type { DashboardKeypairView } from "@/lib/falcon512Storage";
+import { txUrl as explorerTxUrl } from "@/lib/explorer";
 import { usePublicClient } from "wagmi";
 
 interface Props {
@@ -177,9 +178,15 @@ export function DeployAccountCard({ owner, keypair, deployments, onDeployed }: P
                 : "Deploy smart account"}
         </button>
         {txHash && (
-          <span className="break-all font-mono text-[11px] text-zinc-400">
+          <a
+            className="break-all font-mono text-[11px] text-zinc-400 underline decoration-dotted hover:text-nexora-accent"
+            href={explorerTxUrl(txHash)}
+            target="_blank"
+            rel="noreferrer"
+            title="open trace"
+          >
             tx: {txHash}
-          </span>
+          </a>
         )}
       </div>
 

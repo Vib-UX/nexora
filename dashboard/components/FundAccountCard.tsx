@@ -14,6 +14,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { abi } from "@nexora/wallet-sdk";
+import { txUrl as explorerTxUrl } from "@/lib/explorer";
 
 interface Props {
   /// Address to fund. May be `null` while the user hasn't deployed yet —
@@ -155,9 +156,15 @@ export function FundAccountCard({ account }: Props) {
               : "Send from MetaMask"}
         </button>
         {txHash && (
-          <span className="break-all font-mono text-[11px] text-zinc-400">
+          <a
+            className="break-all font-mono text-[11px] text-zinc-400 underline decoration-dotted hover:text-nexora-accent"
+            href={explorerTxUrl(txHash)}
+            target="_blank"
+            rel="noreferrer"
+            title="open trace"
+          >
             tx: {txHash}
-          </span>
+          </a>
         )}
       </div>
 

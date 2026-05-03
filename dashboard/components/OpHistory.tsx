@@ -5,6 +5,7 @@ import { type Address, type Hex, formatEther } from "viem";
 import { usePublicClient } from "wagmi";
 import { abi } from "@nexora/wallet-sdk";
 import type { Deployments } from "@/lib/deployments";
+import { txUrl as explorerTxUrl } from "@/lib/explorer";
 
 interface Entry {
   txHash: Hex;
@@ -94,7 +95,7 @@ export function OpHistory({ deployments }: { deployments: Deployments }) {
       </h3>
       <div className="mt-4 divide-y divide-nexora-border">
         {entries.map((e) => (
-          <div key={e.txHash} className="flex items-center justify-between py-2 text-xs">
+          <div key={e.txHash} className="flex items-center justify-between gap-3 py-2 text-xs">
             <div className="font-mono">
               <div className="text-zinc-300">{shorten(e.opHash)}</div>
               <div className="text-zinc-600">block {e.blockNumber.toString()}</div>
@@ -110,6 +111,15 @@ export function OpHistory({ deployments }: { deployments: Deployments }) {
             >
               {e.success ? "ok" : "revert"}
             </span>
+            <a
+              href={explorerTxUrl(e.txHash)}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-[10px] text-zinc-400 hover:text-nexora-accent"
+              title={`open trace for ${e.txHash}`}
+            >
+              trace ↗
+            </a>
           </div>
         ))}
       </div>

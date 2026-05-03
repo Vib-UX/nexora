@@ -18,6 +18,10 @@ import { DeployAccountCard } from "@/components/DeployAccountCard";
 import { FundAccountCard } from "@/components/FundAccountCard";
 import { SendForm } from "@/components/SendForm";
 import { OpHistory } from "@/components/OpHistory";
+import {
+  type PendingTraceTx,
+  VerifierTracePanel,
+} from "@/components/VerifierTracePanel";
 import { useDeployments } from "@/lib/useDeployments";
 import { type DashboardKeypairView } from "@/lib/falcon512Storage";
 import { NEXORA_CHAIN } from "@nexora/wallet-sdk";
@@ -35,6 +39,7 @@ export default function Home() {
   const [keypair, setKeypair] = useState<DashboardKeypairView | null>(null);
   const [accountAddress, setAccountAddress] = useState<Address | null>(null);
   const [accountBalance, setAccountBalance] = useState<bigint>(0n);
+  const [pendingTrace, setPendingTrace] = useState<PendingTraceTx | null>(null);
 
   // Anchors for "fix this" in-page jumps from the SendForm.
   const keygenRef = useRef<HTMLDivElement | null>(null);
@@ -150,7 +155,10 @@ export default function Home() {
         accountBalance={accountBalance}
         deployments={deployments}
         onJumpToStep={handleJump}
+        onTx={setPendingTrace}
       />
+
+      <VerifierTracePanel pending={pendingTrace} deployments={deployments} />
 
       <OpHistory deployments={deployments} />
     </div>

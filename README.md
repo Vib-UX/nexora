@@ -39,16 +39,34 @@ nexora/
 
 ```bash
 pnpm install
-./scripts/dev-up.sh                       # boot local Orbit-style devnet
+./scripts/dev-up.sh                       # boots Nitro RPC
 pnpm --filter wallet-sdk build
 DEPLOYER_PRIVATE_KEY=0x... pnpm deploy    # deploys Stylus contracts, writes deployments.json
 pnpm dashboard:dev                        # http://localhost:3000
 ```
 
+Endpoints exposed by the devnet:
+
+| URL                                       | Purpose                                                          |
+| ----------------------------------------- | ---------------------------------------------------------------- |
+| `http://localhost:3000`                   | Dashboard (key gen, deploy, fund, send, verifier trace panel).   |
+| `http://localhost:3000/tx/<hash>`         | In-dashboard tx explorer (receipt + decoded call tree).          |
+| `http://localhost:8547`                   | Nitro JSON-RPC (chainId `412346`, Geth `debug_traceTransaction`).|
+
+The dashboard ships its own `/tx/[hash]` route built on
+`debug_traceTransaction` (Geth `callTracer`) — no separate Erigon /
+Otterscan / Blockscout container is required. Set
+`NEXT_PUBLIC_EXPLORER_URL` (e.g. `https://my-explorer/`) to redirect tx
+links to a hosted explorer instead.
+
 The dashboard is the primary demo surface: connect MetaMask, generate a
 Falcon-512 keypair in your browser, deploy your smart account, fund it,
-and exercise LOW / HIGH / CRITICAL policy bands. The Falcon-512 wasm
-bundle ships under `dashboard/public/wasm/falcon512/`; rebuild only when
+and exercise LOW / HIGH / CRITICAL policy bands. After every send the
+**Verifier trace** panel calls `debug_traceTransaction` on the Nitro RPC
+and surfaces the Falcon-512 `verify(msgHash, sig 666 B, pubkey 897 B)`
+call directly from the call tree — including gas used and the boolean
+return value. The Falcon-512 wasm bundle ships under
+`dashboard/public/wasm/falcon512/`; rebuild only when
 `signer/falcon-signer-wasm` changes:
 
 ```bash

@@ -1,6 +1,7 @@
 # Node
 node_modules/
 .pnpm-store/
+*.tsbuildinfo
 .next/
 out/
 dist/

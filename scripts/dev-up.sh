@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-# Boot a local Nexora devnet (Nitro node + optional Blockscout).
+# Boot a local Nexora devnet (Nitro node).
+#
+# Block/tx exploration is handled inside the dashboard itself at
+# `/tx/[hash]`; no external explorer container is required.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -19,15 +22,10 @@ for i in {1..30}; do
   sleep 2
 done
 
-if [[ "${WITH_EXPLORER:-0}" == "1" ]]; then
-  echo "[nexora] starting Blockscout explorer..."
-  ( cd chain && docker compose --profile explorer up -d )
-  echo "[nexora] explorer: http://localhost:4000"
-fi
-
 echo "[nexora] devnet ready."
 echo "  RPC:      http://localhost:8547"
 echo "  WS:       ws://localhost:8548"
 echo "  ChainID:  412346 (0x6453A) — Nitro --dev"
+echo "  Explorer: http://localhost:3000/tx/<hash>  (in-dashboard)"
 echo
 echo "Next: pnpm tsx scripts/deploy-all.ts"

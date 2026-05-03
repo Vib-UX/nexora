@@ -31,6 +31,7 @@ import {
   type DashboardKeypairView,
   resolveFalcon512Signer,
 } from "@/lib/falcon512Storage";
+import { txUrl as explorerTxUrl } from "@/lib/explorer";
 
 const ADDR_ZERO = "0x0000000000000000000000000000000000000000" as Address;
 
@@ -88,6 +89,9 @@ interface Props {
   deployments: Deployments;
   /// Render a small "fix this" hint next to disabled preconditions.
   onJumpToStep?: (step: "keys" | "deploy" | "fund") => void;
+  /// Notify the page of every successful submit so a sibling Verifier
+  /// Trace panel can fetch `debug_traceTransaction` for it.
+  onTx?: (tx: { hash: Hex; tag: PolicyTag; scheme: VerifierScheme }) => void;
 }
 
 export function SendForm({
@@ -98,6 +102,7 @@ export function SendForm({
   accountBalance,
   deployments,
   onJumpToStep,
+  onTx,
 }: Props) {
   const { connector } = useAccount();
   const publicClient = usePublicClient();
@@ -342,6 +347,7 @@ export function SendForm({
         detail: `tx ${shorten(sentTx)}`,
         ms: Math.round(performance.now() - t5),
       });
+      onTx?.({ hash: sentTx, tag: policyTag, scheme });
 
       // 6. confirm — handled by the useWaitForTransactionReceipt effect.
       patchStep("confirm", { status: "running" });
@@ -535,9 +541,25 @@ export function SendForm({
           {running ? "Signing & submitting…" : "Sign & send"}
         </button>
         {txHash && (
-          <span className="break-all font-mono text-[11px] text-emerald-300">
+          <a
+            className="break-all font-mono text-[11px] text-emerald-300 underline decoration-dotted hover:text-emerald-200"
+            href={explorerTxUrl(txHash)}
+            target="_blank"
+            rel="noreferrer"
+            title="open trace"
+          >
             {txHash}
-          </span>
+          </a>
+        )}
+        {txHash && (
+          <a
+            className="text-[11px] text-zinc-400 hover:text-nexora-accent"
+            href={explorerTxUrl(txHash)}
+            target="_blank"
+            rel="noreferrer"
+          >
+            open trace ↗
+          </a>
         )}
       </div>
 
