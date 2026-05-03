@@ -1,4 +1,5 @@
 {
+  "installCommand": "pnpm install",
   "buildCommand": "pnpm --filter @nexora/wallet-sdk build && next build",
   "framework": "nextjs"
 }
