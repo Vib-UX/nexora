@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Post-quantum smart-wallet stack on Arbitrum Orbit (Stylus/Rust).",
   "license": "MIT",
-  "packageManager": "pnpm@9.12.0",
+  "packageManager": "pnpm@9.15.4",
   "engines": {
     "node": ">=20"
   },
