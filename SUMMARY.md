@@ -4,6 +4,10 @@
 
 * [Overview](docs/overview.md)
 
+## Hosted devnet and configuration
+
+* [Hosted configuration](docs/hosted-configuration.md)
+
 ## Vision and standards
 
 * [Nexora and EIP-8141](docs/eip8141-mapping.md)

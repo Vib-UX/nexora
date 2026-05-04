@@ -1,10 +1,8 @@
 # Dashboard flow
 
-The Nexora dashboard is a self-driving onboarding flow: connect a
-wallet, generate quantum-resistant keys, deploy a smart account, fund
-it, and exercise the policy engine. Each card is independently
-addressable — clicking *Sign & send* with an unmet precondition jumps
-back to the relevant card.
+The dashboard walks through connect wallet, Falcon-512 keygen, deploy proxy,
+fund it, then send demo ops through `executeUserOp`. Cards are independent:
+if *Sign & send* runs before a step is done, the UI scrolls you back.
 
 ```mermaid
 flowchart TD
@@ -21,6 +19,46 @@ flowchart TD
     Daemon --> Send
     Trace -- "debug_traceTransaction" --> Nitro[(Nitro RPC :8547)]
     TxPage -- "debug_traceTransaction + receipt" --> Nitro
+```
+
+## End-to-end example (one pass)
+
+What touches the chain and what stays in the browser:
+
+| Step | Contract call? | What happens |
+| --- | --- | --- |
+| 1. Generate Falcon-512 | **No** | Wasm (or `falcon-signer` daemon) derives keys; secret + public key sit in browser storage (`nexora.falcon512.sk.v1`). Nothing is submitted on-chain yet. |
+| 2. Deploy smart account | **Yes (EOA transaction)** | `AccountFactory.createAccount(owner, pqPubkeyHash, salt)` from the **connected EOA**. This is a normal contract call, **not** an ERC-4337 UserOp bundle. The factory commits `pqPubkeyHash` into CREATE2 so that wallet binds to this PQ key. |
+| 3. Fund | **Yes (EOA transaction)** | EOA calls the proxy’s payable `fund()` so ETH lands on the smart account balance. Still not a UserOp. |
+| 4. Send demo tx | **Yes** | Build a UserOp, sign per `PolicyEngine` tag, then submit `executeUserOp(...)` on the smart account. The wallet flow matches UserOp validation even though the dashboard submits as a single tx from the owner context (see SendForm below). |
+
+Deploy is intentionally separate from UserOp: you need an EOA with gas to create the proxy and to fund it before any `executeUserOp` path runs.
+
+**Presets vs policy bands** (defaults after `scripts/deploy-all.ts` set thresholds so small balances can hit every band: HIGH above `0.01` ETH, CRITICAL above `0.1` ETH unless you override env):
+
+1. **LOW** (e.g. `0.001` ETH, empty calldata): classification stays LOW → **ECDSA only** on the op hash; Falcon step skipped on-chain.
+2. **HIGH** (e.g. `0.05` ETH with non-zero calldata): **ECDSA + Falcon-512** co-sign; verifier at registry scheme 2 by default.
+3. **CRITICAL** (e.g. `0.5` ETH): **PQ + timelock** path (ECDSA signature step skipped in the form); see account validator for timelock semantics.
+
+PQ keys act as an **off-chain co-signer**: they sign the UserOp hash in the browser or daemon. Verification is on-chain via `VerifierRegistry` → `IPQVerifier`, not via a second registered EOA.
+
+```mermaid
+flowchart LR
+    subgraph offchain [Off-chain]
+        K[Falcon keygen + storage]
+        S[PQ sign UserOp hash]
+    end
+    subgraph eoa_tx [EOA transactions]
+        D[AccountFactory.createAccount]
+        F["fund() on proxy"]
+    end
+    subgraph userop [Account execution]
+        E[executeUserOp]
+    end
+    K --> D
+    D --> F
+    F --> E
+    S --> E
 ```
 
 ## ConnectCard

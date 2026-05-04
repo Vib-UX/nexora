@@ -1,36 +1,41 @@
 ---
 description: >-
-  Why Nexora exists: post-quantum validation paths, hybrid smart accounts, and
-  alignment with protocol directions such as EIP-8141.
+  Why Nexora exists: hybrid ECDSA + PQ validation, policy bands, and where to
+  find hosted endpoints and env configuration.
 icon: shield
 ---
 
 # Overview
 
-Classical Ethereum accounts rely on ECDSA over curves that are not known to be
-hard for a large-scale quantum computer. That is a **future consensus risk** for
-assets and identities anchored to those keys today. Nexora does not pretend
-that every user must abandon ECDSA overnight; it **layers** a post-quantum
-verification path beside ECDSA so deployments can tighten policy over time.
+Nexora pairs familiar **ECDSA** ownership with an on-chain **Falcon-512** path
+via a **VerifierRegistry**, so **HIGH** and **CRITICAL** operations get
+stronger guarantees (PQ co-signatures and timelock paths where policy defines
+them) while everyday flows can stay lean. Swap verifier implementations behind
+the registry without redeploying user accounts as the stack evolves toward
+post-quantum verification at scale.
 
-## What Nexora is
+## What ships in the repo
 
-Nexora is a **custom Arbitrum Orbit L3** plus a **Stylus** smart-account stack:
+1. **Arbitrum Orbit L3** configuration and scripts (`chain/`).
+2. **Stylus contracts**: `NexoraAccount` (hybrid validator), `PolicyEngine`,
+   `VerifierRegistry`, `AccountFactory`, PQ verifiers (`contracts-stylus/`).
+3. **Solidity interfaces** only in `contracts-sol/` (ABI surface for tooling).
+4. **`wallet-sdk`**, optional **`relayer`**, Next.js **`dashboard`**, demo **`agent`**.
 
-- A **hybrid ECDSA + post-quantum** validator on `NexoraAccount`, with rules
-  enforced by an on-chain **PolicyEngine** (LOW / HIGH / CRITICAL).
-- **PQ verification** behind a stable **`VerifierRegistry`** indirection so the
-  concrete verifier (reference mock, real Falcon-512 in Stylus, or a future
-  Nitro precompile) can be swapped **without redeploying wallets**.
-- A TypeScript **wallet-sdk**, optional **relayer**, Next.js **dashboard**, and
-  demo **agent** for end-to-end flows.
+For stack detail see [Architecture](architecture.md). For EIP-8141 framing see
+[Nexora and EIP-8141](eip8141-mapping.md).
 
-For implementation detail and module boundaries, read
-[Architecture](architecture.md). For how this maps onto **EIP-8141** and the
-**Vitalik** framing of isolated `VERIFY` frames and eventual proof aggregation,
-see [Nexora and EIP-8141](eip8141-mapping.md).
+## Custody: EOA vs smart account
 
-## How a request flows (high level)
+| Location | Who signs spends | Notes |
+| --- | --- | --- |
+| ETH on **EOA** | EOA private key only | Move value into the Nexora account when you want **[PolicyEngine](architecture.md)**-governed spends. |
+| ETH on **smart account** | Whatever policy classifies for that `target` / `value` / `callData` | **HIGH**: ECDSA + PQ co-sign. **CRITICAL**: PQ-forward rules including timelock where configured. **LOW**: fast ECDSA-only path for small or routine operations. |
+
+Funds on the smart account are where **HIGH** and **CRITICAL** protections apply;
+see [Threat model](threat-model.md) for the full picture across bands.
+
+## Request path (high level)
 
 ```mermaid
 flowchart LR
@@ -53,15 +58,22 @@ flowchart LR
   Registry --> PQ
 ```
 
+## Configuration and hosted devnet
+
+URLs, chain id, `wallet_addEthereumChain`, and dashboard `NEXT_PUBLIC_*` vars
+are collected in [Hosted configuration](hosted-configuration.md) so GitBook and
+operators have one page without copying the full root README.
+
+Repository layout, scripts, and contract address tables for the public devnet
+stay in the root [README](../README.md).
+
 ## Where to go next
 
 | Topic | Document |
 | --- | --- |
 | Layers, validation flow, verifier swap | [Architecture](architecture.md) |
-| EIP-8141 `SENDER` / `VERIFY` / `EXEC` mapping | [Nexora and EIP-8141](eip8141-mapping.md) |
-| Stylus crates and Solidity interfaces | [Contracts](contracts.md) |
-| Onboarding UI and cards | [Dashboard flow](dashboard-flow.md) |
-| Threats and production checklist | [Threat model](threat-model.md) |
-
-For repository layout, scripts, and hosted devnet URLs, the developer-oriented
-entry is the root [README](../README.md).
+| EIP-8141 mapping | [Nexora and EIP-8141](eip8141-mapping.md) |
+| Stylus crates and interfaces | [Contracts](contracts.md) |
+| Onboarding UI, lifecycle, presets | [Dashboard flow](dashboard-flow.md) |
+| Policy bands and security model | [Threat model](threat-model.md) |
+| RPC URLs and env vars | [Hosted configuration](hosted-configuration.md) |

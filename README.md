@@ -2,7 +2,7 @@
 
 > Post-quantum smart-wallet stack on a custom **Arbitrum Orbit** chain, written in **Rust/Stylus**.
 
-Published narrative docs (GitBook / table of contents): see [`SUMMARY.md`](SUMMARY.md) and [`docs/overview.md`](docs/overview.md).
+Published narrative docs (GitBook / table of contents): see [`SUMMARY.md`](SUMMARY.md), [`docs/overview.md`](docs/overview.md), and hosted URLs plus dashboard env vars in [`docs/hosted-configuration.md`](docs/hosted-configuration.md).
 
 Nexora is a vertically integrated stack that:
 

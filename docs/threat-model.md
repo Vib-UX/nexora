@@ -13,6 +13,13 @@
 | 9 | Sequencer censorship | Force-include via parent chain (Orbit standard) | Manual recovery escape hatch |
 | 10 | DAC compromise (AnyTrust) | Move to Rollup mode for production; AnyTrust is a documented trade-off | Documented |
 
+## Funding the smart account vs ECDSA loss
+
+ETH held **by the Nexora smart account** still exits through `execute_user_op`.
+If the on-chain [PolicyEngine](architecture.md) classifies an operation as **LOW**, validation is **ECDSA-only** (owner key). An attacker who stole only the ECDSA key can move funds **within whatever LOW allows** (small transfers and non-escalated targets under your deployed thresholds). PQ co-sign matters for **HIGH**; **CRITICAL** adds PQ-focused rules including timelock where implemented.
+
+So “we funded the smart account and Falcon is the co-signer” is **not** a blanket guarantee: PQ backs only the bands where policy says so. Keeping substantial savings on the **plain EOA** does not add PQ protection to those coins until they sit behind rules you trust. For mitigations see rows 1–2 in the table above.
+
 ## Out of scope (v1)
 
 - Side-channel attacks on the in-browser reference signer (not intended as a hardened signing surface)
