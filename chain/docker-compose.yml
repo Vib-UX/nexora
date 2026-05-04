@@ -1,4 +1,5 @@
-# Local Nexora devnet — single Nitro node in `--dev` mode.
+# Local Nexora devnet — single Nitro node in `--dev` mode, plus an
+# optional Blockscout explorer stack behind `--profile explorer`.
 #
 # ChainId is 412346 (Nitro's built-in dev chain).
 #
@@ -7,17 +8,22 @@
 #   private key : 0xb6b15c8cb491557369f3c7d2c287b053eb229daa9c22138887752191c9520659
 # This is the deployer used by `scripts/deploy-all.ts`.
 #
-# Block / tx exploration is handled by the dashboard itself
-# (`/tx/[hash]` route). Stock Otterscan can't run against Nitro because
-# Otterscan requires the Erigon-only `erigon_*` and `ots_*` RPC
-# namespaces, which Nitro does not expose. The dashboard uses the
-# Geth-compatible `debug_traceTransaction` (Geth `callTracer`) Nitro
-# does implement and decodes the Falcon-512 verifier call inline.
+# Block / tx exploration: the dashboard ships its own `/tx/[hash]` route
+# that decodes the Falcon-512 verifier call inline (it sticks to the
+# Geth-compatible `debug_traceTransaction` RPC Nitro implements). With
+# `--profile explorer` we additionally bring up a full Blockscout v9
+# instance for richer block / address / contract browsing — see
+# `docs/blockscout.md` and `chain/blockscout/.env.example`.
 #
-# Ports bind to loopback only so JSON-RPC / WS are not exposed publicly;
-# use nginx on 443 (see deploy/vps/) for TLS termination.
+# Run only Nitro:
+#   docker compose up -d
+# Run Nitro + Blockscout explorer:
+#   docker compose --profile explorer up -d
 #
-# Data uses a named Docker volume so `sudo docker-compose` does not leave
+# All ports bind to loopback only so JSON-RPC / WS / Blockscout are not
+# exposed publicly; use nginx on 443 (see deploy/vps/) for TLS termination.
+#
+# Data uses named Docker volumes so `sudo docker-compose` does not leave
 # ./data owned by root (which breaks Nitro: jwtsecret permission denied).
 services:
   nitro:
@@ -41,5 +47,217 @@ services:
       - --ws.api=net,web3,eth,arb,arbdebug
       - --ws.origins=*
 
+  # ---- Blockscout explorer (optional; `docker compose --profile explorer up -d`) ----
+  #
+  # All services join the default compose network and reach Nitro by its
+  # service name (`nitro`). Public ingress is the single nginx-proxy
+  # container bound to 127.0.0.1:4001; the host nginx in deploy/vps/
+  # proxies explorer.nexorapq.in -> 127.0.0.1:4001.
+
+  blockscout-db:
+    image: postgres:17-alpine
+    container_name: nexora-blockscout-db
+    profiles: ["explorer"]
+    restart: unless-stopped
+    shm_size: 256m
+    command: postgres -c 'max_connections=200' -c 'client_connection_check_interval=60000'
+    environment:
+      POSTGRES_DB: blockscout
+      POSTGRES_USER: blockscout
+      POSTGRES_PASSWORD: ${BLOCKSCOUT_DB_PASSWORD:-blockscout}
+    volumes:
+      - nexora-blockscout-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blockscout -d blockscout"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  blockscout-redis:
+    image: redis:7-alpine
+    container_name: nexora-blockscout-redis
+    profiles: ["explorer"]
+    restart: unless-stopped
+    command: redis-server --save '' --appendonly no
+    volumes:
+      - nexora-blockscout-redis:/data
+
+  blockscout-backend:
+    image: ghcr.io/blockscout/blockscout:${BLOCKSCOUT_TAG:-9.0.2}
+    container_name: nexora-blockscout-backend
+    profiles: ["explorer"]
+    pull_policy: always
+    restart: unless-stopped
+    stop_grace_period: 1m
+    depends_on:
+      blockscout-db:
+        condition: service_healthy
+      blockscout-redis:
+        condition: service_started
+      nitro:
+        condition: service_started
+    command: >
+      sh -c "bin/blockscout eval 'Elixir.Explorer.ReleaseTasks.create_and_migrate()' && bin/blockscout start"
+    environment:
+      DATABASE_URL: postgresql://blockscout:${BLOCKSCOUT_DB_PASSWORD:-blockscout}@blockscout-db:5432/blockscout
+      ECTO_USE_SSL: "false"
+      ACCOUNT_REDIS_URL: redis://blockscout-redis:6379
+      # JSON-RPC: Nitro speaks the Geth API. We intentionally do NOT set
+      # CHAIN_TYPE=arbitrum here — Blockscout's Arbitrum indexer expects
+      # real Orbit-style send_count / send_root / l1_block_number columns
+      # that a vanilla `--dev` Nitro chain does not populate, which
+      # crashes the indexer (Ecto QueryError "cannot update non-updatable
+      # field :send_count"). The default ethereum chain type indexes
+      # everything we need (blocks, txs, traces, contracts, events). Flip
+      # to `arbitrum` once switched to a real Orbit deployment.
+      ETHEREUM_JSONRPC_VARIANT: geth
+      ETHEREUM_JSONRPC_HTTP_URL: http://nitro:8547
+      ETHEREUM_JSONRPC_TRACE_URL: http://nitro:8547
+      ETHEREUM_JSONRPC_WS_URL: ws://nitro:8548
+      CHAIN_ID: "412346"
+      SUBNETWORK: ${BLOCKSCOUT_SUBNETWORK:-Nexora Devnet}
+      NETWORK: ${BLOCKSCOUT_NETWORK:-Nexora}
+      COIN_NAME: ETH
+      COIN: ETH
+      PORT: "4000"
+      # Internal-tx fetcher is disabled because Nitro's debug_traceTransaction
+      # returns Arbitrum-specific call types (system precompile calls at
+      # 0x...0071) that Blockscout's default ethereum-mode CallType enum
+      # cannot cast. The dashboard's /tx/[hash] page already renders the
+      # full call tree directly from debug_traceTransaction, so no
+      # functionality is lost. Re-enable on a real Orbit deployment with
+      # CHAIN_TYPE=arbitrum.
+      INDEXER_DISABLE_INTERNAL_TRANSACTIONS_FETCHER: "true"
+      DISABLE_EXCHANGE_RATES: "true"
+      INDEXER_CATCHUP_BLOCK_INTERVAL: 5s
+      MICROSERVICE_SC_VERIFIER_ENABLED: "true"
+      MICROSERVICE_SC_VERIFIER_URL: http://blockscout-smart-contract-verifier:8050/
+      MICROSERVICE_SC_VERIFIER_TYPE: sc_verifier
+      MICROSERVICE_SIG_PROVIDER_ENABLED: "true"
+      MICROSERVICE_SIG_PROVIDER_URL: http://blockscout-sig-provider:8050/
+      MICROSERVICE_VISUALIZE_SOL2UML_ENABLED: "true"
+      MICROSERVICE_VISUALIZE_SOL2UML_URL: http://blockscout-visualizer:8050/
+
+  blockscout-frontend:
+    image: ghcr.io/blockscout/frontend:${BLOCKSCOUT_FRONTEND_TAG:-latest}
+    container_name: nexora-blockscout-frontend
+    profiles: ["explorer"]
+    pull_policy: always
+    # Multi-arch image — let Docker pick the host arch. Next.js SSR is
+    # painfully slow under qemu (HTTP requests time out at 90s+ on the
+    # ARM64 VPS), so on aarch64 hosts you MUST run the native arm64
+    # build. If your registry mirror lacks arm64 for some reason, pin
+    # to linux/amd64 here and expect very slow first paints.
+    restart: unless-stopped
+    depends_on:
+      - blockscout-backend
+    environment:
+      NEXT_PUBLIC_API_HOST: ${BLOCKSCOUT_PUBLIC_HOST:-explorer.nexorapq.in}
+      NEXT_PUBLIC_API_PROTOCOL: ${BLOCKSCOUT_PUBLIC_PROTOCOL:-https}
+      NEXT_PUBLIC_API_BASE_PATH: /
+      NEXT_PUBLIC_API_WEBSOCKET_PROTOCOL: ${BLOCKSCOUT_PUBLIC_WS_PROTOCOL:-wss}
+      NEXT_PUBLIC_APP_HOST: ${BLOCKSCOUT_PUBLIC_HOST:-explorer.nexorapq.in}
+      NEXT_PUBLIC_APP_PROTOCOL: ${BLOCKSCOUT_PUBLIC_PROTOCOL:-https}
+      NEXT_PUBLIC_NETWORK_NAME: ${BLOCKSCOUT_SUBNETWORK:-Nexora Devnet}
+      NEXT_PUBLIC_NETWORK_SHORT_NAME: ${BLOCKSCOUT_NETWORK:-Nexora}
+      NEXT_PUBLIC_NETWORK_ID: "412346"
+      NEXT_PUBLIC_NETWORK_RPC_URL: ${NEXORA_PUBLIC_RPC_URL:-https://blockchain.nexorapq.in}
+      NEXT_PUBLIC_NETWORK_CURRENCY_NAME: Ether
+      NEXT_PUBLIC_NETWORK_CURRENCY_SYMBOL: ETH
+      NEXT_PUBLIC_NETWORK_CURRENCY_DECIMALS: "18"
+      NEXT_PUBLIC_IS_TESTNET: "true"
+      NEXT_PUBLIC_HOMEPAGE_CHARTS: "[]"
+      NEXT_PUBLIC_HIDE_INDEXING_ALERT_BLOCKS: "true"
+      NEXT_PUBLIC_HIDE_INDEXING_ALERT_INT_TXS: "true"
+      NEXT_PUBLIC_API_SPEC_URL: https://raw.githubusercontent.com/blockscout/blockscout-api-v2-swagger/main/swagger.yaml
+
+  blockscout-sig-provider:
+    image: ghcr.io/blockscout/sig-provider:${BLOCKSCOUT_SIG_PROVIDER_TAG:-latest}
+    container_name: nexora-blockscout-sig-provider
+    profiles: ["explorer"]
+    pull_policy: always
+    # amd64-only image (no arm64 published yet). Runs under qemu on
+    # aarch64; cold-startup is slow but it's only consulted on demand
+    # for 4-byte signature lookups so steady-state cost is negligible.
+    platform: linux/amd64
+    restart: unless-stopped
+
+  blockscout-smart-contract-verifier:
+    image: ghcr.io/blockscout/smart-contract-verifier:${BLOCKSCOUT_SC_VERIFIER_TAG:-latest}
+    container_name: nexora-blockscout-sc-verifier
+    profiles: ["explorer"]
+    pull_policy: always
+    restart: unless-stopped
+
+  blockscout-visualizer:
+    image: ghcr.io/blockscout/visualizer:${BLOCKSCOUT_VISUALIZER_TAG:-latest}
+    container_name: nexora-blockscout-visualizer
+    profiles: ["explorer"]
+    pull_policy: always
+    # amd64-only image; only invoked when a user clicks "visualize" on a
+    # contract, so qemu emulation is acceptable.
+    platform: linux/amd64
+    restart: unless-stopped
+
+  blockscout-stats-db:
+    image: postgres:17-alpine
+    container_name: nexora-blockscout-stats-db
+    profiles: ["explorer"]
+    restart: unless-stopped
+    shm_size: 128m
+    command: postgres -c 'max_connections=200'
+    environment:
+      POSTGRES_DB: stats
+      POSTGRES_USER: stats
+      POSTGRES_PASSWORD: ${BLOCKSCOUT_STATS_DB_PASSWORD:-stats}
+    volumes:
+      - nexora-blockscout-stats-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U stats -d stats"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  blockscout-stats:
+    image: ghcr.io/blockscout/stats:${BLOCKSCOUT_STATS_TAG:-latest}
+    container_name: nexora-blockscout-stats
+    profiles: ["explorer"]
+    pull_policy: always
+    restart: unless-stopped
+    depends_on:
+      blockscout-stats-db:
+        condition: service_healthy
+      blockscout-backend:
+        condition: service_started
+    environment:
+      STATS__DB_URL: postgres://stats:${BLOCKSCOUT_STATS_DB_PASSWORD:-stats}@blockscout-stats-db:5432/stats
+      STATS__BLOCKSCOUT_DB_URL: postgresql://blockscout:${BLOCKSCOUT_DB_PASSWORD:-blockscout}@blockscout-db:5432/blockscout
+      STATS__BLOCKSCOUT_API_URL: http://blockscout-backend:4000
+      STATS__CREATE_DATABASE: "true"
+      STATS__RUN_MIGRATIONS: "true"
+
+  # Single-port nginx that fronts backend + frontend on 127.0.0.1:4001.
+  # The host nginx in deploy/vps/ proxies explorer.nexorapq.in -> here.
+  blockscout-proxy:
+    image: nginx:1.27-alpine
+    container_name: nexora-blockscout-proxy
+    profiles: ["explorer"]
+    restart: unless-stopped
+    depends_on:
+      - blockscout-backend
+      - blockscout-frontend
+    ports:
+      - "127.0.0.1:4001:80"
+    volumes:
+      - ./blockscout/proxy.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      BACK_PROXY_PASS: http://blockscout-backend:4000
+      FRONT_PROXY_PASS: http://blockscout-frontend:3000
+
 volumes:
   nexora-nitro-data:
+  nexora-blockscout-db:
+  nexora-blockscout-redis:
+  nexora-blockscout-stats-db:

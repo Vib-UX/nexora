@@ -24,7 +24,12 @@ import {
   gasNum,
   selectorOf,
 } from "@/lib/trace";
-import { shortHex } from "@/lib/explorer";
+import {
+  blockscoutAddressUrl,
+  blockscoutBlockUrl,
+  blockscoutTxUrl,
+  shortHex,
+} from "@/lib/explorer";
 
 interface Props {
   params: { hash: string };
@@ -134,13 +139,28 @@ export default function TxPage({ params }: Props) {
     );
   }
 
+  const blockscoutTx = blockscoutTxUrl(hash);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <BackLink />
-        <span className="text-[11px] uppercase tracking-wider text-zinc-500">
-          Tx
-        </span>
+        <div className="flex items-center gap-2">
+          {blockscoutTx && (
+            <a
+              href={blockscoutTx}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-md border border-nexora-border bg-zinc-900/60 px-2 py-1 text-[10px] uppercase tracking-wider text-zinc-300 hover:border-nexora-accent hover:text-nexora-accent"
+              title="open this tx on the Blockscout explorer"
+            >
+              Open in Blockscout ↗
+            </a>
+          )}
+          <span className="text-[11px] uppercase tracking-wider text-zinc-500">
+            Tx
+          </span>
+        </div>
       </div>
 
       <div className="rounded-xl border border-nexora-border bg-nexora-card p-6">
@@ -181,8 +201,28 @@ export default function TxPage({ params }: Props) {
             </Row>
             <Row label="Value">{formatEther(tx.value)} ETH</Row>
             <Row label="Block">
-              #{receipt.blockNumber.toString()} (idx{" "}
-              {receipt.transactionIndex})
+              {(() => {
+                const url = blockscoutBlockUrl(receipt.blockNumber);
+                const inner = (
+                  <>
+                    #{receipt.blockNumber.toString()} (idx{" "}
+                    {receipt.transactionIndex})
+                  </>
+                );
+                return url ? (
+                  <a
+                    href={url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline decoration-dotted hover:text-nexora-accent"
+                    title="open block on Blockscout"
+                  >
+                    {inner}
+                  </a>
+                ) : (
+                  inner
+                );
+              })()}
             </Row>
             <Row label="Gas used">
               {receipt.gasUsed.toString()}{" "}
@@ -377,9 +417,22 @@ function StatusBadge({ receipt }: { receipt: TransactionReceipt }) {
 
 function AddressInline({ addr, label }: { addr: string; label: string | null }) {
   if (!addr) return <span className="text-zinc-500">—</span>;
+  const bsUrl = blockscoutAddressUrl(addr);
   return (
     <span>
-      <span>{addr}</span>
+      {bsUrl ? (
+        <a
+          href={bsUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-dotted hover:text-nexora-accent"
+          title="open address on Blockscout"
+        >
+          {addr}
+        </a>
+      ) : (
+        <span>{addr}</span>
+      )}
       {label && (
         <span className="ml-2 rounded border border-nexora-border bg-zinc-900/50 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-zinc-400">
           {label}

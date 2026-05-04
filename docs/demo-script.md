@@ -207,6 +207,14 @@ dashboard's op history streams them in real time via `IntentExecuted`.
   page, set `NEXT_PUBLIC_EXPLORER_URL=https://your-explorer/` before
   starting the dashboard. Every "open trace ↗" link in the UI will
   point at `${base}/tx/<hash>` instead.
+- **Want Blockscout alongside the bespoke verifier-aware view**
+  (additive, not a replacement), set
+  `NEXT_PUBLIC_BLOCKSCOUT_URL=https://explorer.nexorapq.in` before
+  starting the dashboard. Every tx hash row grows a "Blockscout ↗"
+  chip next to the existing `trace ↗` link, the `/tx/[hash]` page
+  gains an "Open in Blockscout ↗" pill, and `From` / `To` / `Block`
+  rows become Blockscout deep-links. The bespoke page stays primary.
+  See [docs/blockscout.md](blockscout.md) for the explorer setup.
 - **MetaMask out of reach**: `pnpm --filter @nexora/relayer dev` and
   switch the SDK to `relayerUrl` mode for sponsor-relayed submission.
 

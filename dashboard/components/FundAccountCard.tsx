@@ -14,7 +14,7 @@ import {
   useWriteContract,
 } from "wagmi";
 import { abi } from "@nexora/wallet-sdk";
-import { txUrl as explorerTxUrl } from "@/lib/explorer";
+import { txUrl as explorerTxUrl, blockscoutTxUrl } from "@/lib/explorer";
 
 interface Props {
   /// Address to fund. May be `null` while the user hasn't deployed yet —
@@ -166,6 +166,21 @@ export function FundAccountCard({ account }: Props) {
             tx: {txHash}
           </a>
         )}
+        {txHash &&
+          (() => {
+            const bs = blockscoutTxUrl(txHash);
+            return bs ? (
+              <a
+                className="text-[11px] text-zinc-500 hover:text-nexora-accent"
+                href={bs}
+                target="_blank"
+                rel="noreferrer"
+                title="open on Blockscout"
+              >
+                Blockscout ↗
+              </a>
+            ) : null;
+          })()}
       </div>
 
       {(writeError || error) && (

@@ -52,12 +52,21 @@ Endpoints exposed by the devnet:
 | `http://localhost:3000`                   | Dashboard (key gen, deploy, fund, send, verifier trace panel).   |
 | `http://localhost:3000/tx/<hash>`         | In-dashboard tx explorer (receipt + decoded call tree).          |
 | `http://localhost:8547`                   | Nitro JSON-RPC (chainId `412346`, Geth `debug_traceTransaction`).|
+| `http://localhost:4001`                   | Blockscout v9 (optional, `--profile explorer`; see [docs/blockscout.md](docs/blockscout.md)). |
 
 The dashboard ships its own `/tx/[hash]` route built on
 `debug_traceTransaction` (Geth `callTracer`) — no separate Erigon /
-Otterscan / Blockscout container is required. Set
-`NEXT_PUBLIC_EXPLORER_URL` (e.g. `https://my-explorer/`) to redirect tx
-links to a hosted explorer instead.
+Otterscan / Blockscout container is required for the demo. Two env
+knobs steer outbound links independently:
+
+- `NEXT_PUBLIC_EXPLORER_URL=https://your-explorer/` *replaces* the
+  in-dashboard `/tx/[hash]` route entirely; every "trace ↗" link goes
+  off-site.
+- `NEXT_PUBLIC_BLOCKSCOUT_URL=https://explorer.nexorapq.in` is
+  *additive*: the bespoke verifier-aware page stays primary, every tx
+  hash in the UI grows a sibling "Blockscout ↗" chip, and the
+  `/tx/[hash]` page gains an "Open in Blockscout ↗" pill plus
+  Blockscout deep-links on `From` / `To` / `Block` rows.
 
 The dashboard is the primary demo surface: connect MetaMask, generate a
 Falcon-512 keypair in your browser, deploy your smart account, fund it,
