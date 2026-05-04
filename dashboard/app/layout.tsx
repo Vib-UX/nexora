@@ -25,7 +25,7 @@ export default function RootLayout({
               </h1>
               <a
                 className="text-xs text-zinc-500 hover:text-zinc-200"
-                href="https://github.com/"
+                href="https://docs.nexorapq.in"
                 target="_blank"
                 rel="noreferrer"
               >

@@ -27,6 +27,58 @@ nexora/
 └── docs/
 ```
 
+## Hosted Nexora Devnet (public)
+
+The production-facing dashboard and RPCs use TLS hostnames (not localhost). Chain parameters match the Nitro dev profile (`chainId` **412346** / `0x64ABA`, same as local `scripts/dev-up.sh`). Orbit rollout metadata in [`chain/orbit-config.json`](chain/orbit-config.json) documents a registered **20056** (`0x4E58`) target for parent-chain deploys; the live host below currently advertises **412346** via `eth_chainId`.
+
+| Item | Value |
+| --- | --- |
+| Dashboard | [https://www.nexorapq.in](https://www.nexorapq.in) |
+| JSON-RPC | `https://blockchain.nexorapq.in` |
+| WebSocket | `wss://ws.blockchain.nexorapq.in` |
+| Blockscout | [https://explorer.nexorapq.in](https://explorer.nexorapq.in) |
+| Chain name | Nexora Devnet |
+| Chain ID | `412346` (`0x64ABA`) |
+| `wallet_addEthereumChain` | `chainId`: `0x64ABA`, `rpcUrls`: [`https://blockchain.nexorapq.in`], `blockExplorerUrls`: [`https://explorer.nexorapq.in`] |
+
+### Example transaction (Falcon-512 PQ verifier in trace)
+
+The dashboard `/tx/[hash]` view decodes `debug_traceTransaction` and highlights the on-chain `verify(msgHash, sig, pubkey)` call into the Falcon-512 Stylus verifier.
+
+- **PQ-aware trace (primary):** [https://www.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0](https://www.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0)
+- **Same tx on Blockscout:** [https://explorer.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0](https://explorer.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0)
+
+### Deployed Stylus contracts (hosted devnet)
+
+Addresses below match the call tree for the sample tx above (Blockscout `/address/...`).
+
+| Contract | Address |
+| --- | --- |
+| `AccountFactory` | [0x3DF948c956e14175f43670407d5796b95Bb219D8](https://explorer.nexorapq.in/address/0x3DF948c956e14175f43670407d5796b95Bb219D8) |
+| `NexoraAccount` (implementation) | [0x4A2bA922052bA54e29c5417bC979Daaf7D5Fe4f4](https://explorer.nexorapq.in/address/0x4A2bA922052bA54e29c5417bC979Daaf7D5Fe4f4) |
+| `VerifierRegistry` | [0xe1080224b632a93951a7cfa33eeea9fd81558b5e](https://explorer.nexorapq.in/address/0xe1080224b632a93951a7cfa33eeea9fd81558b5e) |
+| `PolicyEngine` | [0x525c2aba45f66987217323e8a05ea400c65d06dc](https://explorer.nexorapq.in/address/0x525c2aba45f66987217323e8a05ea400c65d06dc) |
+| `pq-verifier-falcon512` | [0x1294b86822ff4976bfe136cb06cf43ec7fcf2574](https://explorer.nexorapq.in/address/0x1294b86822ff4976bfe136cb06cf43ec7fcf2574) |
+| Example smart account (proxy, same tx `to`) | [0xc6c61ba7602a75006d219b07f044afb467a7eddb](https://explorer.nexorapq.in/address/0xc6c61ba7602a75006d219b07f044afb467a7eddb) |
+
+After a fresh deploy, update this table from `deployments.json` / Blockscout.
+
+### Production dashboard env
+
+Build the dashboard for the hosted stack by copying [`dashboard/.env.production.example`](dashboard/.env.production.example) to `dashboard/.env.production` and setting at least:
+
+```bash
+NEXT_PUBLIC_NEXORA_RPC_URL=https://blockchain.nexorapq.in
+NEXT_PUBLIC_NEXORA_WS_URL=wss://ws.blockchain.nexorapq.in
+NEXT_PUBLIC_BLOCKSCOUT_URL=https://explorer.nexorapq.in
+```
+
+Optional: set `NEXT_PUBLIC_EXPLORER_URL` to send every in-dashboard “trace ↗” link off-site (see example in the env file). Leave it unset to keep the bespoke PQ verifier trace page as the default target.
+
+### Screenshots
+
+<!-- Add hosted dashboard / trace / Blockscout screenshots here. -->
+
 ## Prerequisites
 
 - Node.js >= 20
@@ -45,7 +97,7 @@ DEPLOYER_PRIVATE_KEY=0x... pnpm deploy    # deploys Stylus contracts, writes dep
 pnpm dashboard:dev                        # http://localhost:3000
 ```
 
-Endpoints exposed by the devnet:
+Endpoints exposed by the **local** devnet:
 
 | URL                                       | Purpose                                                          |
 | ----------------------------------------- | ---------------------------------------------------------------- |
