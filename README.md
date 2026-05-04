@@ -46,6 +46,8 @@ The production-facing dashboard and RPCs use TLS hostnames (not localhost). Chai
 The dashboard `/tx/[hash]` view decodes `debug_traceTransaction` and highlights the on-chain `verify(msgHash, sig, pubkey)` call into the Falcon-512 Stylus verifier.
 
 - **PQ-aware trace (primary):** [https://www.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0](https://www.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0)
+<img width="2012" height="1254" alt="Nexora dashboard /tx view: call trace with Falcon-512 verify(msgHash, sig, pubkey) highlighted" src="https://github.com/user-attachments/assets/ffeaf9ed-4c2d-4d94-bd0b-bb3ad8452987" />
+
 - **Same tx on Blockscout:** [https://explorer.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0](https://explorer.nexorapq.in/tx/0xaf7ce812ee448e085692fce8e10c9abd09c46617a9c3179ceb147d0cd60a16d0)
 
 ### Deployed Stylus contracts (hosted devnet)
