@@ -1,5 +1,7 @@
 # Nexora ↔ EIP-8141 alignment
 
+**In this doc:** Vitalik-style framing for EIP-8141 (`SENDER` / `VERIFY` / `EXEC`), a concrete table mapping Nexora’s `UserOp` and registry model onto those frames, and migration notes—without changing Nexora’s on-chain semantics today.
+
 > Companion to `docs/architecture.md`. Maps Nexora's existing UserOp +
 > envelope flow onto EIP-8141 frames so a future "default code" emission of
 > the Nexora account is a mechanical re-shaping, not a redesign.

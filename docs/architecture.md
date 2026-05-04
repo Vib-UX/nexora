@@ -1,5 +1,6 @@
 # Nexora — Architecture
 
+> For motivation and reader-facing context first, see [Overview](overview.md).
 > Companion to the source. Read this first. Intentionally
 > implementation-oriented; no marketing.
 
