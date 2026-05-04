@@ -25,7 +25,14 @@ export function nexoraWsRpcUrl(): string {
 }
 
 export function nexoraExplorerUrl(): string {
-  const v = process.env.NEXT_PUBLIC_EXPLORER_URL;
+  // Wallet-side block explorer URL (advertised via wallet_addEthereumChain).
+  // Prefer the Blockscout-specific knob so MetaMask's "view tx" button
+  // pops Blockscout when configured, even when the dashboard's own
+  // NEXT_PUBLIC_EXPLORER_URL knob is left unset (which keeps the bespoke
+  // /tx/[hash] page as the primary in-dashboard click target).
+  const v =
+    process.env.NEXT_PUBLIC_BLOCKSCOUT_URL ??
+    process.env.NEXT_PUBLIC_EXPLORER_URL;
   return typeof v === "string" && v.length > 0
     ? stripTrailingSlash(v)
     : "http://localhost:4000";

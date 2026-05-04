@@ -25,7 +25,14 @@ export function getNexoraWsRpcUrl() {
     return stripTrailingSlash(raw);
 }
 function getNexoraBlockExplorerUrl() {
-    const raw = process.env.NEXT_PUBLIC_EXPLORER_URL ??
+    // Prefer the Blockscout-specific knob so the wallet's
+    // `blockExplorerUrls` advertises Blockscout when configured, even when
+    // the dashboard-side NEXT_PUBLIC_EXPLORER_URL knob (which redirects
+    // every in-dashboard `trace ↗` link off-site) is intentionally left
+    // unset to keep the bespoke /tx/[hash] page as primary.
+    const raw = process.env.NEXT_PUBLIC_BLOCKSCOUT_URL ??
+        process.env.NEXORA_BLOCKSCOUT_URL ??
+        process.env.NEXT_PUBLIC_EXPLORER_URL ??
         process.env.NEXORA_EXPLORER_URL ??
         "http://localhost:4000";
     return stripTrailingSlash(raw);

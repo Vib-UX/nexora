@@ -14,7 +14,7 @@ import {
 import { abi } from "@nexora/wallet-sdk";
 import type { Deployments } from "@/lib/deployments";
 import type { DashboardKeypairView } from "@/lib/falcon512Storage";
-import { txUrl as explorerTxUrl } from "@/lib/explorer";
+import { txUrl as explorerTxUrl, blockscoutTxUrl } from "@/lib/explorer";
 import { usePublicClient } from "wagmi";
 
 interface Props {
@@ -188,6 +188,21 @@ export function DeployAccountCard({ owner, keypair, deployments, onDeployed }: P
             tx: {txHash}
           </a>
         )}
+        {txHash &&
+          (() => {
+            const bs = blockscoutTxUrl(txHash);
+            return bs ? (
+              <a
+                className="text-[11px] text-zinc-500 hover:text-nexora-accent"
+                href={bs}
+                target="_blank"
+                rel="noreferrer"
+                title="open on Blockscout"
+              >
+                Blockscout ↗
+              </a>
+            ) : null;
+          })()}
       </div>
 
       {writeError && (

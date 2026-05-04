@@ -26,15 +26,15 @@ sudo bash deploy/vps/install.sh
 sudo bash deploy/vps/apply-nginx.sh
 ```
 
-That copies [`nexora-websocket-upgrade.map.conf`](./nginx/nexora-websocket-upgrade.map.conf) and [`blockchain.nexorapq.in.servers.conf`](./nginx/blockchain.nexorapq.in.servers.conf) into `/etc/nginx/snippets/`, enables [`nexora-blockchain`](./nginx/blockchain.nexorapq.in.conf) in `sites-enabled`, then reloads nginx.
+That copies [`nexora-websocket-upgrade.map.conf`](./nginx/nexora-websocket-upgrade.map.conf), [`blockchain.nexorapq.in.servers.conf`](./nginx/blockchain.nexorapq.in.servers.conf), and [`explorer.nexorapq.in.servers.conf`](./nginx/explorer.nexorapq.in.servers.conf) into `/etc/nginx/snippets/`, enables [`nexora-blockchain`](./nginx/blockchain.nexorapq.in.conf) in `sites-enabled`, then reloads nginx.
 
-Then obtain certificates (after DNS resolves to this server). Add the **`ws.blockchain`** A record first (see [DNS.md](./DNS.md)), or start with only the RPC host:
+Then obtain certificates (after DNS resolves to this server). Add the **`ws.blockchain`** and (if running the explorer) **`explorer`** A records first (see [DNS.md](./DNS.md)), or start with only the RPC host:
 
 ```bash
-sudo certbot --nginx -d blockchain.nexorapq.in -d ws.blockchain.nexorapq.in
-# If ws.* is not in DNS yet:
+sudo certbot --nginx -d blockchain.nexorapq.in -d ws.blockchain.nexorapq.in -d explorer.nexorapq.in
+# If ws.* / explorer.* are not in DNS yet:
 # sudo certbot --nginx -d blockchain.nexorapq.in
-# (add ws DNS, extend cert later: sudo certbot certonly --nginx -d ... --expand)
+# (add ws / explorer DNS, extend cert later: sudo certbot certonly --nginx -d ... --expand)
 ```
 
 ## Frontend / SDK environment
@@ -45,8 +45,28 @@ After TLS is live, point the dashboard (and other apps) at:
 |----------|---------|
 | `NEXT_PUBLIC_NEXORA_RPC_URL` | `https://blockchain.nexorapq.in` |
 | `NEXT_PUBLIC_NEXORA_WS_URL` | `wss://ws.blockchain.nexorapq.in` |
+| `NEXT_PUBLIC_BLOCKSCOUT_URL` | `https://explorer.nexorapq.in` (only if running the explorer) |
 
 See [dashboard/.env.production.example](../../dashboard/.env.production.example).
+
+## Optional: Blockscout explorer
+
+The `chain/docker-compose.yml` ships a full Blockscout v9 stack behind
+`--profile explorer` (backend, frontend, Postgres, Redis, sig-provider,
+smart-contract-verifier, stats, visualizer, internal nginx proxy). Bring
+it up after Nitro is healthy:
+
+```bash
+# Optional: cp chain/.env.example chain/.env  &&  edit values
+docker compose -f chain/docker-compose.yml --profile explorer up -d
+docker logs -f nexora-blockscout-backend   # ~60s for first migrate
+```
+
+The internal proxy binds **127.0.0.1:4001 only**; `explorer.nexorapq.in`
+is served by the same host nginx via [`explorer.nexorapq.in.servers.conf`](./nginx/explorer.nexorapq.in.servers.conf).
+Sizing on a typical VPS: ~1 GB RAM idle, well under 1 GB disk for a Nitro
+`--dev` chain. See [`docs/blockscout.md`](../../docs/blockscout.md) for
+the lean-stack opt-out and Stylus contract verification notes.
 
 ## Existing nginx already on port 80 / 443
 

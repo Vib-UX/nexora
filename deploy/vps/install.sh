@@ -31,10 +31,15 @@ fi
 # Nitro: localhost-only ports (see chain/docker-compose.yml)
 docker compose -f chain/docker-compose.yml up -d
 
+# Optional: Blockscout explorer behind --profile explorer (see chain/.env.example).
+# Skipped by default; uncomment to bring up the full v9 stack at 127.0.0.1:4001.
+# docker compose -f chain/docker-compose.yml --profile explorer up -d
+
 # nginx snippets + site (snippets are reusable when merging into an existing nginx)
 install -m0755 -d /etc/nginx/snippets
 install -m0644 deploy/vps/nginx/nexora-websocket-upgrade.map.conf /etc/nginx/snippets/
 install -m0644 deploy/vps/nginx/blockchain.nexorapq.in.servers.conf /etc/nginx/snippets/
+install -m0644 deploy/vps/nginx/explorer.nexorapq.in.servers.conf /etc/nginx/snippets/
 
 NGINX_SITE="blockchain.nexorapq.in.conf"
 install -m0644 "deploy/vps/nginx/${NGINX_SITE}" "/etc/nginx/sites-available/${NGINX_SITE}"
@@ -45,8 +50,11 @@ systemctl reload nginx
 
 echo ""
 echo "Done. Next:"
-echo "  1) Ensure DNS A records for blockchain.nexorapq.in and ws.blockchain.nexorapq.in → this host."
+echo "  1) Ensure DNS A records for blockchain.nexorapq.in, ws.blockchain.nexorapq.in"
+echo "     and (if running the explorer) explorer.nexorapq.in -> this host."
 echo "  2) bash deploy/vps/verify-dns.sh blockchain.nexorapq.in"
-echo "  3) certbot --nginx -d blockchain.nexorapq.in -d ws.blockchain.nexorapq.in"
+echo "  3) certbot --nginx -d blockchain.nexorapq.in -d ws.blockchain.nexorapq.in -d explorer.nexorapq.in"
 echo "  4) curl -sk https://blockchain.nexorapq.in -X POST -H 'Content-Type: application/json' \\"
 echo "       -d '{\"jsonrpc\":\"2.0\",\"method\":\"eth_chainId\",\"params\":[],\"id\":1}'"
+echo "  5) (explorer) docker compose -f chain/docker-compose.yml --profile explorer up -d"
+echo "     curl -sk https://explorer.nexorapq.in/api/v2/stats"

@@ -5,7 +5,7 @@ import { type Address, type Hex, formatEther } from "viem";
 import { usePublicClient } from "wagmi";
 import { abi } from "@nexora/wallet-sdk";
 import type { Deployments } from "@/lib/deployments";
-import { txUrl as explorerTxUrl } from "@/lib/explorer";
+import { txUrl as explorerTxUrl, blockscoutTxUrl } from "@/lib/explorer";
 
 interface Entry {
   txHash: Hex;
@@ -120,6 +120,20 @@ export function OpHistory({ deployments }: { deployments: Deployments }) {
             >
               trace ↗
             </a>
+            {(() => {
+              const bs = blockscoutTxUrl(e.txHash);
+              return bs ? (
+                <a
+                  href={bs}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-[10px] text-zinc-500 hover:text-nexora-accent"
+                  title={`open ${e.txHash} on Blockscout`}
+                >
+                  Blockscout ↗
+                </a>
+              ) : null;
+            })()}
           </div>
         ))}
       </div>

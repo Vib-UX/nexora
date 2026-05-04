@@ -172,18 +172,30 @@ re-opened in the explorer view.
 
 ## Explorer helper
 
-`dashboard/lib/explorer.ts`. Centralises tx URLs:
+`dashboard/lib/explorer.ts`. Centralises tx URLs and exposes two
+independent env knobs:
 
 - `getExplorerBase()` — `null` by default (dashboard-internal). Returns
   `process.env.NEXT_PUBLIC_EXPLORER_URL` if set (no trailing slash).
 - `txUrl(hash)` — `/tx/<hash>` when internal, `${base}/tx/<hash>`
-  otherwise.
+  otherwise. **Replaces** the in-dashboard route entirely when the
+  env knob is set.
 - `isInternalExplorer()` — boolean.
+- `getBlockscoutBase()` / `hasBlockscout()` — read
+  `NEXT_PUBLIC_BLOCKSCOUT_URL`.
+- `blockscoutTxUrl(hash)` / `blockscoutAddressUrl(addr)` /
+  `blockscoutBlockUrl(n)` — build deep-links into the Blockscout
+  instance, or return `null` when unset. **Additive**: the bespoke
+  `/tx/[hash]` page stays the primary click target; components render
+  a sibling "Blockscout ↗" chip when the base is configured.
 - `shortHex(...)` — `0x1234…abcd` formatter.
 
-`SendForm`, `OpHistory`, `DeployAccountCard`, `FundAccountCard`, and
-`VerifierTracePanel` all consume these helpers so a single env var
-override (`NEXT_PUBLIC_EXPLORER_URL`) re-targets every link in the UI.
+`SendForm`, `OpHistory`, `DeployAccountCard`, `FundAccountCard`,
+`VerifierTracePanel`, and the `/tx/[hash]` page all consume these
+helpers. `NEXT_PUBLIC_EXPLORER_URL` re-targets every link in the UI;
+`NEXT_PUBLIC_BLOCKSCOUT_URL` adds a parallel Blockscout chip without
+disturbing the bespoke verifier-aware view. See
+[blockscout.md](blockscout.md).
 
 ## Shared trace helpers
 

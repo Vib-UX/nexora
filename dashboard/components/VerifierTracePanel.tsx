@@ -4,7 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { type Address, type Hex } from "viem";
 import { usePublicClient } from "wagmi";
 import type { Deployments } from "@/lib/deployments";
-import { txUrl as explorerTxUrl, shortHex } from "@/lib/explorer";
+import {
+  txUrl as explorerTxUrl,
+  blockscoutTxUrl,
+  shortHex,
+} from "@/lib/explorer";
 import {
   type CallFrame,
   decodeBoolOutput,
@@ -112,6 +116,20 @@ export function VerifierTracePanel({ pending, deployments }: Props) {
             >
               {shortHex(pending.hash)}
             </a>
+            {(() => {
+              const bs = blockscoutTxUrl(pending.hash);
+              return bs ? (
+                <a
+                  className="ml-2 text-zinc-500 hover:text-nexora-accent"
+                  href={bs}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="open on Blockscout"
+                >
+                  Blockscout ↗
+                </a>
+              ) : null;
+            })()}
             <span className="ml-2 text-zinc-500">· tag {tagName}</span>
             <span className="ml-2 text-zinc-500">· scheme {pending.scheme}</span>
           </p>
